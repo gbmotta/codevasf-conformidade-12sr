@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from conformidade.loaders import _read_pdf
+from conformidade.loaders import _read_pdf_native
 
 
 class TipoEntidade(str, Enum):
@@ -109,7 +109,8 @@ def parse_checklist_text(text: str) -> list[ChecklistItem]:
 
 
 def load_checklist_from_pdf(pdf_path: Path, tipo: TipoEntidade) -> Checklist:
-    text = _read_pdf(pdf_path)
+    # Listas oficiais são PDFs com texto; usa extração nativa (sem tupla OCR)
+    text = _read_pdf_native(pdf_path)
     items = parse_checklist_text(text)
     if not items:
         items = [

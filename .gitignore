@@ -10,3 +10,7 @@ data/uploads/*
 *.xlsx
 !checklists/**
 .cursor/
+
+huggin_token.txt
+*_token.txt
+.secrets/
