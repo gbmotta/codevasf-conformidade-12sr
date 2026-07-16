@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 
 import gradio as gr
+import spaces
 
 from conformidade.analyzer import StatusConformidade, analisar_conformidade
 from conformidade.checklist import TipoEntidade, label_tipo, load_checklist
@@ -35,7 +36,9 @@ def _system_status() -> str:
     )
 
 
+@spaces.GPU(duration=180)
 def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
+    """ZeroGPU exige @spaces.GPU; a inferência LLM usa HF API (CPU/OCR no container)."""
     if zip_file is None:
         raise gr.Error("Envie um arquivo ZIP com a documentação.")
 

@@ -17,11 +17,21 @@ Interface web (Streamlit) para comparar requerimentos de doação (ZIP ou pasta)
 - **Local / intranet:** IA via **Ollama**
 - **Hugging Face Spaces:** IA via **HF Inference API** (`LLM_BACKEND=hf`)
 
-## Demo no Hugging Face
+## Onde está publicado
 
-1. Abra o Space
-2. Em **Settings → Secrets**, configure `HF_TOKEN` (token com permissão de Inference)
-3. Opcional: `HF_MODEL` (padrão `Qwen/Qwen2.5-7B-Instruct`)
+| Destino | URL | Para quê |
+|---------|-----|----------|
+| **GitHub (código)** | https://github.com/gbmotta/codevasf-conformidade-12sr | clonar / desenvolver |
+| **HF Space (interface)** | https://huggingface.co/spaces/gbmotta/codevasf-conformidade | outros users testarem no navegador |
+| HF (código espelho) | https://huggingface.co/gbmotta/codevasf-conformidade-12sr | espelho do código |
+
+Redeploy do Space (como no PepMem-AI):
+
+```bash
+python scripts/deploy_hf_space.py gbmotta --space codevasf-conformidade
+```
+
+O Space usa **Gradio + ZeroGPU** (conta free). Streamlit Docker (intranet) continua em `app/streamlit_app.py`.
 
 ## Interface
 
