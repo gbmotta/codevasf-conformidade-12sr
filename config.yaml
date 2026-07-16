@@ -1,0 +1,8 @@
+app:
+  title: "CODEVASF 12ª SR — Análise de Conformidade Documental"
+
+analysis:
+  # Limite de caracteres por documento enviado ao LLM (evita estouro de contexto)
+  max_chars_per_document: 3500
+  # Limite total de contexto dos documentos na análise
+  max_total_document_chars: 28000

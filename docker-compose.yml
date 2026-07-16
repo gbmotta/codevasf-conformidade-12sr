@@ -1,0 +1,25 @@
+services:
+  analise-conformidade:
+    build: .
+    container_name: codevasf-conformidade
+    restart: unless-stopped
+    ports:
+      - "${STREAMLIT_PORT:-8502}:7860"
+    env_file:
+      - .env
+    environment:
+      PORT: "7860"
+      LLM_BACKEND: ${LLM_BACKEND:-ollama}
+      CHECKLISTS_PATH: /app/checklists
+      UPLOADS_PATH: /app/data/uploads
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3}
+    volumes:
+      - uploads_data:/app/data/uploads
+      # Opcional: pastas de requerimentos no share (somente leitura)
+      - ${REQUERIMENTOS_HOST_PATH:-./data}:/requerimentos:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  uploads_data:

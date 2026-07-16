@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/uploads/*
+!data/uploads/.gitkeep
+.streamlit/secrets.toml
+*.zip
+.DS_Store
+*.xlsx
+!checklists/**
+.cursor/

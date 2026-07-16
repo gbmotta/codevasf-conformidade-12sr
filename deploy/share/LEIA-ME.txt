@@ -1,0 +1,30 @@
+Atalho — Análise de Conformidade Documental CODEVASF
+====================================================
+
+Coloque estes arquivos na raiz do compartilhamento:
+
+  \\Srv0312sr\12.SR
+
+Como usar (qualquer PC da rede):
+  - CODEVASF Conformidade.url                 <- duplo clique (recomendado)
+  - Abrir Conformidade CODEVASF.bat           <- alternativa
+  - Abrir Conformidade CODEVASF.html          <- alternativa
+
+Somente se estiver logado DIRETAMENTE no servidor Srv0312sr:
+  - CODEVASF Conformidade (somente neste servidor).url  -> usa localhost
+
+Por que nao usar localhost para todos?
+  Quando voce abre um atalho em \\Srv0312sr\12.SR no seu PC,
+  "localhost" significa O SEU computador, nao o servidor.
+  Por isso o atalho principal aponta para http://Srv0312sr:8502
+
+Requisitos (TI):
+  - Docker com codevasf-conformidade rodando em Srv0312sr
+  - Porta 8502 liberada na rede interna
+  - Ollama acessivel pelo container
+
+Os usuarios NAO precisam de Python — so duplo clique e o navegador abre.
+
+Portas na 12ª SR:
+  - 8501 = Assistente RAG (codevasf-rag)
+  - 8502 = Análise de Conformidade (este sistema)
