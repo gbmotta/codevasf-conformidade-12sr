@@ -14,3 +14,5 @@ data/uploads/*
 huggin_token.txt
 *_token.txt
 .secrets/
+
+.deploy_hf/
