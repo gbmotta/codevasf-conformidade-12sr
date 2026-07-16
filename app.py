@@ -23,6 +23,22 @@ STATUS_PT = {
     StatusConformidade.NAO_ATENDIDO: "NÃO ATENDIDO",
 }
 
+# Cores: verde / amarelo / vermelho
+STATUS_BADGE = {
+    StatusConformidade.ATENDIDO: (
+        '<span style="display:inline-block;padding:2px 10px;border-radius:999px;'
+        'background:#c6efce;color:#006100;font-weight:700;font-size:0.85em;">ATENDIDO</span>'
+    ),
+    StatusConformidade.PARCIAL: (
+        '<span style="display:inline-block;padding:2px 10px;border-radius:999px;'
+        'background:#ffeb9c;color:#9c5700;font-weight:700;font-size:0.85em;">PARCIAL</span>'
+    ),
+    StatusConformidade.NAO_ATENDIDO: (
+        '<span style="display:inline-block;padding:2px 10px;border-radius:999px;'
+        'background:#ffc7ce;color:#9c0006;font-weight:700;font-size:0.85em;">NÃO ATENDIDO</span>'
+    ),
+}
+
 
 def _system_status() -> str:
     settings = load_settings()
@@ -96,17 +112,18 @@ def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
             "",
             relatorio.resumo,
             "",
-            f"- Atendidos: **{counts['atendido']}**",
-            f"- Parciais: **{counts['parcial']}**",
-            f"- Não atendidos: **{counts['nao_atendido']}**",
+            (
+                f'- <span style="color:#006100;font-weight:700;">Atendidos: {counts["atendido"]}</span> · '
+                f'<span style="color:#9c5700;font-weight:700;">Parciais: {counts["parcial"]}</span> · '
+                f'<span style="color:#9c0006;font-weight:700;">Não atendidos: {counts["nao_atendido"]}</span>'
+            ),
             "",
             "---",
             "",
         ]
         for item in relatorio.itens:
-            lines.append(
-                f"### {item.numero}. [{STATUS_PT[item.status]}] {item.descricao}"
-            )
+            badge = STATUS_BADGE[item.status]
+            lines.append(f"### {item.numero}. {badge} {item.descricao}")
             lines.append(f"**Motivo:** {item.motivo}")
             if item.documentos_relacionados:
                 lines.append("**Arquivos:** " + ", ".join(item.documentos_relacionados))
