@@ -36,9 +36,14 @@ def _system_status() -> str:
     )
 
 
-@spaces.GPU(duration=180)
+@spaces.GPU(duration=60)
+def _zerogpu_ping() -> str:
+    """Satisfaz o requisito do hardware ZeroGPU (análise real roda em CPU + HF API)."""
+    return "ok"
+
+
 def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
-    """ZeroGPU exige @spaces.GPU; a inferência LLM usa HF API (CPU/OCR no container)."""
+    """OCR + checklist + LLM via HF Inference (sem GPU longa)."""
     if zip_file is None:
         raise gr.Error("Envie um arquivo ZIP com a documentação.")
 
