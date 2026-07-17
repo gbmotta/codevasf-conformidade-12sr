@@ -16,3 +16,7 @@ huggin_token.txt
 .secrets/
 
 .deploy_hf/
+
+# Manual de identidade visual (binário grande — manter local)
+id_visual_codevasf.pdf
+id_visual*.pdf

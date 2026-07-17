@@ -1,4 +1,24 @@
-"""Interface Gradio para Hugging Face Spaces — Conformidade Documental CODEVASF 12ª SR."""
+#!/usr/bin/env python3
+"""
+Interface Gradio — Análise de Conformidade Documental (Codevasf 12ª SR).
+
+Uso principal:
+  - Hugging Face Spaces (Gradio + ZeroGPU)
+  - Execução local: ``python app.py`` → http://localhost:7860
+
+Fluxo da UI:
+  1. Usuário escolhe tipo (Prefeitura / Associação) e envia ZIP
+  2. Regras determinísticas + LLM avaliam a Lista de Documentos
+  3. Ajuste humano opcional e download (Texto / Excel / Word / PDF)
+
+Backends de IA (env ``LLM_BACKEND``):
+  - ``ollama``   — intranet / local
+  - ``zerogpu``  — Space HF (padrão no Space)
+  - ``hf``       — Inference Providers (créditos)
+  - ``auto``     — Ollama se disponível; senão HF/ZeroGPU
+
+Tema visual: ``app/styles.py`` (Manual de Identidade Visual Codevasf).
+"""
 
 from __future__ import annotations
 
@@ -8,8 +28,26 @@ import uuid
 from pathlib import Path
 
 import gradio as gr
-import spaces
 
+try:
+    import spaces
+except ImportError:  # ambiente local sem pacote spaces (HF Spaces traz o real)
+    class spaces:  # type: ignore[no-redef]
+        @staticmethod
+        def GPU(duration=None, **_kwargs):
+            def decorator(fn):
+                return fn
+
+            return decorator
+
+from app.styles import (
+    GRADIO_CSS,
+    gradio_theme,
+    render_hero,
+    render_side_left,
+    render_side_right,
+    render_steps,
+)
 from conformidade.analyzer import analisar_conformidade
 from conformidade.checklist import TipoEntidade, label_tipo, load_checklist
 from conformidade.config import load_settings
@@ -27,18 +65,22 @@ from conformidade.report import (
     relatorio_para_xlsx,
 )
 
+# Badges HTML alinhados à paleta institucional (verde / amarelo / vermelho)
 STATUS_BADGE = {
     StatusConformidade.ATENDIDO: (
-        '<span style="display:inline-block;padding:2px 10px;border-radius:999px;'
-        'background:#c6efce;color:#006100;font-weight:700;font-size:0.85em;">ATENDIDO</span>'
+        '<span class="cv-badge cv-badge-ok" style="display:inline-block;padding:0.2rem 0.55rem;'
+        'border-radius:999px;background:#d9f2e3;color:#0b6b3a;font-weight:700;'
+        'font-size:0.78rem;">ATENDIDO</span>'
     ),
     StatusConformidade.PARCIAL: (
-        '<span style="display:inline-block;padding:2px 10px;border-radius:999px;'
-        'background:#ffeb9c;color:#9c5700;font-weight:700;font-size:0.85em;">PARCIAL</span>'
+        '<span class="cv-badge cv-badge-parcial" style="display:inline-block;padding:0.2rem 0.55rem;'
+        'border-radius:999px;background:#fff1d6;color:#8a5a00;font-weight:700;'
+        'font-size:0.78rem;">PARCIAL</span>'
     ),
     StatusConformidade.NAO_ATENDIDO: (
-        '<span style="display:inline-block;padding:2px 10px;border-radius:999px;'
-        'background:#ffc7ce;color:#9c0006;font-weight:700;font-size:0.85em;">NÃO ATENDIDO</span>'
+        '<span class="cv-badge cv-badge-nao" style="display:inline-block;padding:0.2rem 0.55rem;'
+        'border-radius:999px;background:#fde2e2;color:#9b1c1c;font-weight:700;'
+        'font-size:0.78rem;">NÃO ATENDIDO</span>'
     ),
 }
 
@@ -46,23 +88,41 @@ STATUS_CHOICES = ["atendido", "parcial", "nao_atendido"]
 
 
 def _system_status() -> str:
+    """Resumo de saúde do LLM e do OCR para o acordeão da UI."""
     settings = load_settings()
     backend = resolve_backend(settings)
     ok, msg = check_llm_health(settings)
     ocr_ok, ocr_msg = ocr_available()
+    model = (
+        settings.zerogpu_model
+        if backend == "zerogpu"
+        else settings.hf_model
+        if backend == "hf"
+        else settings.ollama_chat_model
+    )
     return (
         f"**LLM:** `{backend}` — {'OK' if ok else 'FALHA'} ({msg})\n\n"
         f"**OCR:** {'OK' if ocr_ok else 'FALHA'} ({ocr_msg})\n\n"
-        f"**Modelo HF:** `{settings.hf_model}`"
+        f"**Modelo:** `{model}`"
     )
 
 
-@spaces.GPU(duration=60)
-def _zerogpu_ping() -> str:
-    return "ok"
+def _estimate_zerogpu_duration(_settings, _checklist, documents) -> int:
+    """Estima duração da reserva ZeroGPU (menor = melhor fila/cota)."""
+    n = len(documents) if documents else 1
+    return 60 if n <= 25 else 90
+
+
+@spaces.GPU(duration=_estimate_zerogpu_duration)
+def _analisar_com_zerogpu(settings, checklist, documents):
+    """Roda a análise inteira em uma única entrada GPU (Space HF)."""
+    return analisar_conformidade(
+        settings, checklist, documents, batch_size=10, on_progress=None
+    )
 
 
 def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
+    """Monta o Markdown exibido na área de resultado (com badges HTML)."""
     counts = relatorio.contagem
     versao = "revisada" if relatorio.revisado else "automática"
     lines = [
@@ -72,9 +132,9 @@ def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
         relatorio.resumo,
         "",
         (
-            f'- <span style="color:#006100;font-weight:700;">Atendidos: {counts["atendido"]}</span> · '
-            f'<span style="color:#9c5700;font-weight:700;">Parciais: {counts["parcial"]}</span> · '
-            f'<span style="color:#9c0006;font-weight:700;">Não atendidos: {counts["nao_atendido"]}</span>'
+            f'- <span style="color:#0b6b3a;font-weight:700;">Atendidos: {counts["atendido"]}</span> · '
+            f'<span style="color:#8a5a00;font-weight:700;">Parciais: {counts["parcial"]}</span> · '
+            f'<span style="color:#9b1c1c;font-weight:700;">Não atendidos: {counts["nao_atendido"]}</span>'
         ),
         "",
         "---",
@@ -84,7 +144,7 @@ def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
         badge = STATUS_BADGE[item.status]
         lines.append(
             f"### {item.numero}. {badge} "
-            f"<small style='color:#666'>({item.fonte})</small> {item.descricao}"
+            f"<small style='color:#5a7264'>({item.fonte})</small> {item.descricao}"
         )
         lines.append(f"**Motivo:** {item.motivo}")
         if item.documentos_relacionados:
@@ -94,6 +154,7 @@ def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
 
 
 def _relatorio_to_editor_rows(relatorio: RelatorioConformidade) -> list[list]:
+    """Converte o relatório em linhas editáveis do Dataframe de revisão."""
     rows = []
     for item in relatorio.itens:
         rows.append(
@@ -112,6 +173,7 @@ def _relatorio_to_editor_rows(relatorio: RelatorioConformidade) -> list[list]:
 def _export_files(
     relatorio: RelatorioConformidade, work: Path | None = None
 ) -> tuple[str, str, str, str]:
+    """Gera os quatro arquivos de exportação e devolve os caminhos."""
     out_dir = (work or Path(tempfile.mkdtemp(prefix="conf_out_"))) / "saida"
     out_dir.mkdir(parents=True, exist_ok=True)
     suffix = "_revisado" if relatorio.revisado else ""
@@ -127,6 +189,7 @@ def _export_files(
 
 
 def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
+    """Callback principal: ZIP → análise → relatório + arquivos para download."""
     if zip_file is None:
         raise gr.Error("Envie um arquivo ZIP com a documentação.")
 
@@ -158,9 +221,17 @@ def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
         progress(0.2, desc=msg)
 
     try:
-        relatorio = analisar_conformidade(
-            settings, checklist, documents, on_progress=on_progress
-        )
+        backend = resolve_backend(settings)
+        if backend == "zerogpu":
+            progress(
+                0.25,
+                desc="IA no ZeroGPU (1ª execução pode baixar o modelo; ~1 min)...",
+            )
+            relatorio = _analisar_com_zerogpu(settings, checklist, documents)
+        else:
+            relatorio = analisar_conformidade(
+                settings, checklist, documents, on_progress=on_progress
+            )
     except (OllamaError, ValueError) as exc:
         raise gr.Error(str(exc)) from exc
 
@@ -183,6 +254,7 @@ def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
 
 
 def aplicar_revisao(editor_rows, state_dict):
+    """Aplica overrides humanos da tabela e regenera os exports."""
     if not state_dict:
         raise gr.Error("Execute a análise antes de revisar.")
     if not editor_rows:
@@ -213,49 +285,86 @@ def aplicar_revisao(editor_rows, state_dict):
     )
 
 
+def _gradio_major() -> int:
+    """Major version do Gradio (5: theme no Blocks; 6+: theme no launch)."""
+    return int(gr.__version__.split(".", 1)[0])
+
+
 def build_ui() -> gr.Blocks:
-    with gr.Blocks(title="CODEVASF 12ª SR — Conformidade Documental") as demo:
+    """Monta o layout: laterais institucionais + área central de análise."""
+    hero_html = render_hero(
+        "Compare o requerimento (ZIP) com a Lista de Documentos para doação de bens "
+        "móveis — Prefeituras ou Associações — com regras automáticas + IA."
+    )
+    blocks_kwargs: dict = {"title": "Codevasf 12ª SR — Conformidade Documental"}
+    if _gradio_major() < 6:
+        blocks_kwargs["theme"] = gradio_theme()
+        blocks_kwargs["css"] = GRADIO_CSS
+
+    with gr.Blocks(**blocks_kwargs) as demo:
         state = gr.State(None)
-        gr.Markdown(
-            """
-# CODEVASF 12ª SR — Análise de Conformidade Documental
-1. Envie o ZIP · 2. Analise (regras + IA) · 3. Ajuste status se precisar · 4. Baixe o relatório
-"""
-        )
-        with gr.Accordion("Status do sistema", open=False):
-            status = gr.Markdown(_system_status())
-            gr.Button("Atualizar status").click(fn=_system_status, outputs=status)
 
-        tipo = gr.Radio(
-            choices=[
-                "Prefeitura",
-                "Associação / Cooperativa / Instituição pública",
-            ],
-            value="Prefeitura",
-            label="Tipo de solicitante",
-        )
-        zip_in = gr.File(label="ZIP com a documentação", file_types=[".zip"])
-        btn = gr.Button("Analisar conformidade", variant="primary")
+        with gr.Row(elem_classes=["cv-layout"]):
+            with gr.Column(scale=2, min_width=260, elem_classes=["cv-side"]):
+                gr.HTML(render_side_left())
 
-        resultado = gr.Markdown()
-        inventario = gr.Textbox(label="Inventário dos arquivos", lines=6)
+            with gr.Column(scale=5, elem_classes=["cv-main"]):
+                gr.HTML(hero_html)
+                gr.HTML(render_steps())
 
-        gr.Markdown("### Ajuste humano (opcional)")
-        editor = gr.Dataframe(
-            headers=["Nº", "Status", "Fonte", "Descrição", "Motivo", "Arquivos"],
-            datatype=["number", "str", "str", "str", "str", "str"],
-            col_count=(6, "fixed"),
-            interactive=True,
-            label="Edite a coluna Status (atendido | parcial | nao_atendido) e/ou Motivo",
-            wrap=True,
-        )
-        btn_revisar = gr.Button("Aplicar revisão e gerar relatório revisado")
+                with gr.Accordion("Status do sistema", open=False):
+                    status = gr.Markdown(_system_status())
+                    gr.Button("Atualizar status", size="sm").click(
+                        fn=_system_status, outputs=status
+                    )
 
-        with gr.Row():
-            md_out = gr.File(label="Relatório .md")
-            xlsx_out = gr.File(label="Relatório .xlsx")
-            docx_out = gr.File(label="Relatório .docx")
-            pdf_out = gr.File(label="Relatório .pdf")
+                with gr.Row():
+                    tipo = gr.Radio(
+                        choices=[
+                            "Prefeitura",
+                            "Associação / Cooperativa / Instituição pública",
+                        ],
+                        value="Prefeitura",
+                        label="Tipo de solicitante",
+                    )
+                    zip_in = gr.File(
+                        label="ZIP com a documentação", file_types=[".zip"]
+                    )
+
+                btn = gr.Button("Analisar conformidade", variant="primary")
+
+                resultado = gr.Markdown()
+                inventario = gr.Textbox(label="Inventário dos arquivos", lines=5)
+
+                gr.Markdown("### Ajuste humano (opcional)")
+                editor = gr.Dataframe(
+                    headers=["Nº", "Status", "Fonte", "Descrição", "Motivo", "Arquivos"],
+                    datatype=["number", "str", "str", "str", "str", "str"],
+                    col_count=(6, "fixed"),
+                    interactive=True,
+                    label="Edite Status (atendido | parcial | nao_atendido) e/ou Motivo",
+                    wrap=True,
+                )
+                btn_revisar = gr.Button("Aplicar revisão e gerar relatório revisado")
+
+                with gr.Row(elem_classes=["cv-downloads"]):
+                    md_out = gr.File(label="Texto (.md)", elem_classes=["cv-download"])
+                    xlsx_out = gr.File(
+                        label="Excel (.xlsx)", elem_classes=["cv-download"]
+                    )
+                    docx_out = gr.File(
+                        label="Word (.docx)", elem_classes=["cv-download"]
+                    )
+                    pdf_out = gr.File(label="PDF (.pdf)", elem_classes=["cv-download"])
+
+                gr.HTML(
+                    '<p class="cv-footer-note">Codevasf — 12ª Superintendência Regional '
+                    "(Natal/RN) · Regras automáticas + IA · Ajuste humano opcional · "
+                    "Identidade visual conforme manual institucional</p>"
+                )
+
+            with gr.Column(scale=2, min_width=260, elem_classes=["cv-side"]):
+                gr.HTML(render_side_right())
 
         btn.click(
             fn=analisar,
@@ -276,14 +385,22 @@ def build_ui() -> gr.Blocks:
             inputs=[editor, state],
             outputs=[resultado, editor, state, md_out, xlsx_out, docx_out, pdf_out],
         )
-        gr.Markdown(
-            "CODEVASF — 12ª Superintendência Regional (Natal/RN) · "
-            "Regras automáticas + IA · Ajuste humano opcional"
-        )
     return demo
 
 
+# Objeto esperado pelo runtime Gradio do Hugging Face Spaces
 demo = build_ui()
 
+
+def _launch_kwargs() -> dict:
+    if _gradio_major() >= 6:
+        return {"theme": gradio_theme(), "css": GRADIO_CSS}
+    return {}
+
+
 if __name__ == "__main__":
-    demo.queue().launch(server_name="0.0.0.0", server_port=7860)
+    demo.queue().launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        **_launch_kwargs(),
+    )

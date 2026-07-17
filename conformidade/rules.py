@@ -1,7 +1,11 @@
-"""Regras determinísticas de conformidade (nome de arquivo + conteúdo).
+"""
+Regras determinísticas de conformidade (sem LLM).
 
-Itens com match forte ou ausência clara são decididos aqui.
-Casos dúbios ficam para o LLM.
+Avalia itens do checklist por nome de arquivo e trechos de conteúdo.
+Decisões fortes (atendido / não atendido) evitam chamada à IA;
+casos dúbios seguem para ``analyzer`` + LLM.
+
+Funções-chave: ``evaluate_item_rules``, ``select_relevant_docs``.
 """
 
 from __future__ import annotations

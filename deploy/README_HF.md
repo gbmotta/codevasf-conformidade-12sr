@@ -22,7 +22,9 @@ de **Prefeituras** ou **Associações / Cooperativas**.
 3. Clique em **Analisar conformidade**  
 4. Baixe o relatório (`.md` / `.xlsx`)
 
-**Secrets necessários no Space:** `HF_TOKEN` (token com Inference).  
-Opcional: `HF_MODEL` (padrão `Qwen/Qwen2.5-7B-Instruct`), `LLM_BACKEND=hf`.
+**IA no Space:** roda no **ZeroGPU** (sem créditos de Inference Providers).  
+Variáveis: `LLM_BACKEND=zerogpu`, `HF_MODEL` ou `ZEROGPU_MODEL` (padrão `Qwen/Qwen2.5-1.5B-Instruct`).
+
+Status do sistema (acordeão na UI) deve mostrar `LLM: zerogpu` — não usa mais o endpoint `router.huggingface.co`.
 
 > Análise assistiva — não substitui a conferência humana da 12ª SR.

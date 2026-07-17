@@ -1,4 +1,9 @@
-"""Geração de relatório em Markdown, Excel, DOCX e PDF."""
+"""
+Exportação do relatório de conformidade.
+
+Formatos: Markdown (``.md``), Excel (``.xlsx``), Word (``.docx``) e PDF.
+Usado pelas UIs Gradio e Streamlit após análise ou revisão humana.
+"""
 
 from __future__ import annotations
 

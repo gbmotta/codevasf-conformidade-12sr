@@ -1,4 +1,9 @@
-"""Modelos de dados da análise de conformidade."""
+"""
+Modelos de dados do relatório de conformidade.
+
+Inclui ``StatusConformidade``, ``ItemResultado``, ``RelatorioConformidade``
+e ``aplicar_revisao_humana`` (override de status/motivo pela equipe).
+"""
 
 from __future__ import annotations
 

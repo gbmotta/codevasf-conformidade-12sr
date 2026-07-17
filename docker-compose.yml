@@ -1,3 +1,11 @@
+# =============================================================================
+# Docker Compose — Conformidade Documental Codevasf 12ª SR (intranet)
+# =============================================================================
+# Sobe o Streamlit na porta host STREAMLIT_PORT (padrão 8502).
+# Conecta ao Ollama do host via host.docker.internal.
+# Volume opcional REQUERIMENTOS_HOST_PATH para pastas de requerimentos.
+# =============================================================================
+
 services:
   analise-conformidade:
     build: .
@@ -13,7 +21,7 @@ services:
       CHECKLISTS_PATH: /app/checklists
       UPLOADS_PATH: /app/data/uploads
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.2:1b}
     volumes:
       - uploads_data:/app/data/uploads
       # Opcional: pastas de requerimentos no share (somente leitura)

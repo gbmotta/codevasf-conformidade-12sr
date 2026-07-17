@@ -1,6 +1,10 @@
-"""Carregamento de documentos a partir de ZIP, pasta ou arquivos avulsos.
+"""
+Carregamento e extração de texto de documentos do requerimento.
 
-Inclui OCR (Tesseract) para PDFs escaneados e imagens.
+Fontes suportadas: ZIP, pasta ou arquivos avulsos (PDF, DOCX, TXT, imagens).
+PDFs com pouco texto nativo e imagens passam por OCR (Tesseract, idioma ``por``).
+
+Funções-chave: ``load_from_zip``, ``scan_folder``, ``ocr_available``.
 """
 
 from __future__ import annotations

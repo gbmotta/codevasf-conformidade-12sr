@@ -1,4 +1,13 @@
-"""Análise de conformidade: regras determinísticas + LLM nos casos dúbios."""
+"""
+Orquestra a análise de conformidade documental.
+
+Pipeline:
+  1. Regras determinísticas (``rules``) para itens claros
+  2. LLM em lotes só para itens pendentes (JSON estruturado)
+  3. Montagem de ``RelatorioConformidade`` com resumo e contagens
+
+Entrada pública: ``analisar_conformidade(settings, checklist, documents, ...)``.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,9 @@
-"""Carrega e interpreta as Listas de Documentos (checklists) em PDF."""
+"""
+Checklists oficiais (PDFs) — Prefeitura e Associação/Cooperativa.
+
+Lê os arquivos em ``checklists/``, extrai itens numerados e expõe
+``TipoEntidade``, ``Checklist`` e ``load_checklist()``.
+"""
 
 from __future__ import annotations
 

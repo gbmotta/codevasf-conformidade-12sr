@@ -1,4 +1,11 @@
-"""Configuração da análise de conformidade."""
+"""
+Configuração da aplicação (env + ``config.yaml``).
+
+Carrega ``Settings`` com caminhos de checklists/uploads, limites de contexto
+e parâmetros de LLM (``LLM_BACKEND``, Ollama, HF, ZeroGPU).
+
+Em Hugging Face Spaces (``SPACE_ID``), o backend padrão é ``zerogpu``.
+"""
 
 from __future__ import annotations
 
@@ -37,11 +44,13 @@ def _resolve_path(raw: str) -> Path:
 
 @dataclass(frozen=True)
 class Settings:
-    llm_backend: str  # auto | ollama | hf
+    llm_backend: str  # auto | ollama | hf | zerogpu
     ollama_base_url: str
     ollama_chat_model: str
     hf_model: str
+    zerogpu_model: str
     hf_token: str | None
+    on_spaces: bool
     checklists_path: Path
     uploads_path: Path
     app_title: str
@@ -58,21 +67,27 @@ def load_settings(env_path: Path | None = None) -> Settings:
     app_cfg = yaml_config.get("app", {})
     analysis_cfg = yaml_config.get("analysis", {})
 
-    # Em Spaces do HF, prioriza inferência remota se não houver Ollama explícito
-    default_backend = "auto"
-    if os.getenv("SPACE_ID") or os.getenv("SYSTEM") == "spaces":
-        default_backend = "hf"
+    on_spaces = bool(os.getenv("SPACE_ID") or os.getenv("SYSTEM") == "spaces")
+    # Em Spaces: ZeroGPU local (sem créditos de Inference Providers).
+    default_backend = "zerogpu" if on_spaces else "auto"
+    default_hf_model = (
+        "Qwen/Qwen2.5-1.5B-Instruct" if on_spaces else "Qwen/Qwen2.5-7B-Instruct"
+    )
+    hf_model = os.getenv("HF_MODEL", default_hf_model)
+    zerogpu_model = os.getenv("ZEROGPU_MODEL", hf_model)
 
     return Settings(
         llm_backend=os.getenv("LLM_BACKEND", default_backend).strip().lower(),
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"),
-        ollama_chat_model=os.getenv("OLLAMA_CHAT_MODEL", "llama3"),
-        hf_model=os.getenv("HF_MODEL", "Qwen/Qwen2.5-7B-Instruct"),
+        ollama_chat_model=os.getenv("OLLAMA_CHAT_MODEL", "llama3.2:1b"),
+        hf_model=hf_model,
+        zerogpu_model=zerogpu_model,
         hf_token=os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN"),
+        on_spaces=on_spaces,
         checklists_path=_resolve_path(os.getenv("CHECKLISTS_PATH", "./checklists")),
         uploads_path=_resolve_path(os.getenv("UPLOADS_PATH", "./data/uploads")),
         app_title=str(
-            app_cfg.get("title", "CODEVASF 12ª SR — Análise de Conformidade Documental")
+            app_cfg.get("title", "Codevasf 12ª SR — Análise de Conformidade Documental")
         ),
         max_chars_per_document=_env_int(
             "MAX_CHARS_PER_DOCUMENT",

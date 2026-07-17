@@ -1,4 +1,16 @@
-"""Interface Streamlit institucional — Conformidade Documental CODEVASF 12ª SR."""
+"""
+Interface Streamlit — intranet / Docker (Codevasf 12ª SR).
+
+Entrada típica:
+  streamlit run app/streamlit_app.py --server.port 8502
+
+Diferença em relação ao ``app.py`` (Gradio):
+  - Pensada para servidor interno com Ollama
+  - Visual institucional próprio (``app/styles.py`` → APP_CSS)
+  - Mesmo núcleo de análise (``conformidade.*``)
+
+Não é o runtime do Hugging Face Space (lá usa Gradio + ZeroGPU).
+"""
 
 from __future__ import annotations
 
@@ -315,7 +327,7 @@ def main() -> None:
     init_session_state()
 
     st.set_page_config(
-        page_title="CODEVASF 12ª SR — Conformidade Documental",
+        page_title="Codevasf 12ª SR — Conformidade Documental",
         page_icon="📑",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -492,7 +504,7 @@ def main() -> None:
     st.markdown(
         """
 <div class="cv-footer-note">
-  CODEVASF — Companhia de Desenvolvimento dos Vales do São Francisco e do Parnaíba ·
+  Codevasf — Companhia de Desenvolvimento dos Vales do São Francisco e do Parnaíba ·
   12ª Superintendência Regional (Natal/RN) · Uso interno ·
   Esta ferramenta não substitui a conferência humana da documentação.
 </div>

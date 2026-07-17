@@ -1,4 +1,14 @@
-"""Cliente de LLM: Ollama (local) ou Hugging Face Inference (Spaces / remoto)."""
+"""
+Cliente unificado de LLM para a análise.
+
+Backends (``Settings.llm_backend`` / env ``LLM_BACKEND``):
+  - ``ollama``  — API local ``/api/chat``
+  - ``zerogpu`` — modelo Transformers no Space (ver ``zerogpu_llm``)
+  - ``hf``      — Hugging Face Inference Providers (pode exigir créditos)
+  - ``auto``    — prefere Ollama; no Space cai para ZeroGPU
+
+API principal: ``chat_completion`` / ``check_llm_health`` / ``resolve_backend``.
+"""
 
 from __future__ import annotations
 
@@ -39,6 +49,16 @@ def _request_json(
     except requests.exceptions.Timeout as exc:
         raise OllamaError("Tempo esgotado ao aguardar resposta do Ollama.") from exc
     except requests.exceptions.HTTPError as exc:
+        detail = ""
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            try:
+                payload = resp.json()
+                detail = str(payload.get("error") or payload)
+            except Exception:
+                detail = (resp.text or "")[:300]
+        if detail:
+            raise OllamaError(f"Erro HTTP do Ollama: {exc} — {detail}") from exc
         raise OllamaError(f"Erro HTTP do Ollama: {exc}") from exc
     except ValueError as exc:
         raise OllamaError("Resposta inválida do Ollama (JSON esperado).") from exc
@@ -69,24 +89,34 @@ def _hf_healthy(settings: Settings) -> tuple[bool, str]:
         return False, "HF_TOKEN ausente (configure o secret no Space ou no .env)."
 
     try:
-        client = InferenceClient(token=settings.hf_token)
-        # Chamada leve só para validar token/modelo — evita gerar texto longo
-        _ = client
+        _ = InferenceClient(token=settings.hf_token)
         return True, f"HF Inference configurado (modelo: {settings.hf_model})"
     except Exception as exc:
         return False, f"HF Inference indisponível: {exc}"
 
 
+def _zerogpu_healthy(settings: Settings) -> tuple[bool, str]:
+    try:
+        import spaces  # noqa: F401
+        import torch  # noqa: F401
+        from transformers import AutoModelForCausalLM  # noqa: F401
+    except ImportError as exc:
+        return False, f"Dependências ZeroGPU ausentes: {exc}"
+
+    model = settings.zerogpu_model
+    return True, f"ZeroGPU local (modelo: {model})"
+
+
 def resolve_backend(settings: Settings) -> str:
     backend = settings.llm_backend
-    if backend == "ollama":
-        return "ollama"
-    if backend == "hf":
-        return "hf"
+    if backend in {"ollama", "hf", "zerogpu"}:
+        return backend
     # auto
     ok, _ = _ollama_healthy(settings)
     if ok:
         return "ollama"
+    if settings.on_spaces:
+        return "zerogpu"
     return "hf"
 
 
@@ -95,6 +125,9 @@ def check_llm_health(settings: Settings) -> tuple[bool, str]:
     if backend == "ollama":
         ok, msg = _ollama_healthy(settings)
         return ok, f"[Ollama] {msg}"
+    if backend == "zerogpu":
+        ok, msg = _zerogpu_healthy(settings)
+        return ok, f"[ZeroGPU] {msg}"
     ok, msg = _hf_healthy(settings)
     return ok, f"[HF] {msg}"
 
@@ -169,10 +202,49 @@ def _chat_hf(
         )
         content = (completion.choices[0].message.content or "").strip()
     except Exception as exc:
+        err = str(exc)
+        if "402" in err or "Payment Required" in err or "depleted" in err.lower():
+            raise OllamaError(
+                "Créditos do Hugging Face Inference Providers esgotados (HTTP 402). "
+                "No Space, use LLM_BACKEND=zerogpu (inferência gratuita na ZeroGPU). "
+                "Localmente, use Ollama (LLM_BACKEND=ollama)."
+            ) from exc
         raise OllamaError(f"Falha na inferência HF ({settings.hf_model}): {exc}") from exc
 
     if not content:
         raise OllamaError("O modelo HF retornou resposta vazia.")
+    return content
+
+
+def _chat_zerogpu(
+    settings: Settings,
+    messages: list[ChatMessage],
+    system_prompt: str | None,
+    temperature: float,
+) -> str:
+    # Import sob demanda: evita carregar o modelo no Streamlit/intranet local.
+    from conformidade.zerogpu_llm import generate_chat
+
+    payload_messages: list[dict[str, str]] = []
+    if system_prompt:
+        payload_messages.append({"role": "system", "content": system_prompt})
+    payload_messages.extend(
+        {"role": message.role, "content": message.content} for message in messages
+    )
+
+    try:
+        content = generate_chat(
+            payload_messages,
+            temperature=temperature,
+            max_new_tokens=1024,
+        ).strip()
+    except Exception as exc:
+        raise OllamaError(
+            f"Falha na inferência ZeroGPU ({settings.zerogpu_model}): {exc}"
+        ) from exc
+
+    if not content:
+        raise OllamaError("O modelo ZeroGPU retornou resposta vazia.")
     return content
 
 
@@ -185,4 +257,6 @@ def chat_completion(
     backend = resolve_backend(settings)
     if backend == "ollama":
         return _chat_ollama(settings, messages, system_prompt, temperature)
+    if backend == "zerogpu":
+        return _chat_zerogpu(settings, messages, system_prompt, temperature)
     return _chat_hf(settings, messages, system_prompt, temperature)

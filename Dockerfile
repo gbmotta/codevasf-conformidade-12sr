@@ -1,3 +1,14 @@
+# =============================================================================
+# Docker — interface Streamlit para intranet (Codevasf 12ª SR)
+# =============================================================================
+# Build:  docker compose build
+# Run:    docker compose up -d
+# App:    http://localhost:8502  (mapeia container:7860)
+#
+# IA: Ollama no host (OLLAMA_BASE_URL=http://host.docker.internal:11434)
+# OCR: Tesseract com pacote de idioma português
+# =============================================================================
+
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -5,10 +16,9 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    LLM_BACKEND=hf \
+    LLM_BACKEND=ollama \
     CHECKLISTS_PATH=/app/checklists \
     UPLOADS_PATH=/app/data/uploads \
-    # Hugging Face Spaces escuta na 7860
     PORT=7860
 
 RUN apt-get update \

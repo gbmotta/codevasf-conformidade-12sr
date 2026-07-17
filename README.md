@@ -15,7 +15,7 @@ short_description: Análise de conformidade documental CODEVASF 12ª SR
 Interface web (Streamlit) para comparar requerimentos de doação (ZIP ou pasta) com a **Lista de Documentos** da 12ª Superintendência Regional.
 
 - **Local / intranet:** IA via **Ollama**
-- **Hugging Face Spaces:** IA via **HF Inference API** (`LLM_BACKEND=hf`)
+- **Hugging Face Spaces:** IA via **ZeroGPU** (`LLM_BACKEND=zerogpu`, sem créditos de Inference Providers)
 
 ## Onde está publicado
 

@@ -1,5 +1,8 @@
+# =============================================================================
+# Configuração auxiliar (sobrescrita por variáveis de ambiente quando existirem)
+# =============================================================================
 app:
-  title: "CODEVASF 12ª SR — Análise de Conformidade Documental"
+  title: "Codevasf 12ª SR — Análise de Conformidade Documental"
 
 analysis:
   # Limite de caracteres por documento enviado ao LLM (evita estouro de contexto)

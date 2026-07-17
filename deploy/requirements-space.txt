@@ -1,9 +1,10 @@
 # =============================================================================
-# Dependências Python — desenvolvimento local + Docker intranet (Streamlit)
+# Dependências Python do Hugging Face Space (Gradio + ZeroGPU)
 # =============================================================================
-# Para o Hugging Face Space use deploy/requirements-space.txt (mais enxuto).
+# Mais enxuto que requirements.txt (sem Streamlit).
+# torch não é pinado: já vem na imagem ZeroGPU / Gradio.
+# Copiado para requirements.txt do Space por scripts/deploy_hf_space.py
 # =============================================================================
-streamlit>=1.32.0
 python-dotenv>=1.0.0
 pyyaml>=6.0.1
 requests>=2.31.0
@@ -16,7 +17,6 @@ pillow>=10.0.0
 huggingface_hub>=0.26.0
 gradio>=5.0.0
 spaces>=0.30.0
-torch
 transformers>=4.45.0
 accelerate>=0.34.0
 fpdf2>=2.7.0
