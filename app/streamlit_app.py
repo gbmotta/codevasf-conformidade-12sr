@@ -14,7 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import streamlit as st
 
 from app.styles import APP_CSS, render_hero, render_steps
-from conformidade.analyzer import RelatorioConformidade, StatusConformidade, analisar_conformidade
+from conformidade.analyzer import analisar_conformidade
 from conformidade.checklist import (
     TipoEntidade,
     infer_tipo_from_names,
@@ -30,6 +30,11 @@ from conformidade.loaders import (
     save_uploaded_bytes,
     scan_folder,
     summarize_inventory,
+)
+from conformidade.models import (
+    RelatorioConformidade,
+    StatusConformidade,
+    aplicar_revisao_humana,
 )
 from conformidade.report import relatorio_para_markdown, relatorio_para_xlsx
 
@@ -155,6 +160,7 @@ def render_item(item) -> None:
         f"""
 <div class="cv-card">
   <span class="cv-badge {css}">{label}</span>
+  <span class="cv-muted">fonte: {item.fonte}</span>
   <div class="cv-item-title">{item.numero}. {item.descricao}</div>
   <div><strong>Motivo:</strong> {item.motivo}</div>
   {"<div class='cv-muted' style='margin-top:0.4rem'>Arquivos: " + ", ".join(item.documentos_relacionados) + "</div>" if item.documentos_relacionados else ""}
@@ -167,11 +173,13 @@ def render_item(item) -> None:
 def render_relatorio(relatorio: RelatorioConformidade) -> None:
     counts = relatorio.contagem
     total = len(relatorio.itens) or 1
+    versao = "revisada" if relatorio.revisado else "automática"
 
     st.markdown("### Resultado da análise")
     st.markdown(
         f"**Entidade / município:** {relatorio.entidade_detectada}  \n"
-        f"**Checklist:** {label_tipo(relatorio.tipo)}"
+        f"**Checklist:** {label_tipo(relatorio.tipo)}  \n"
+        f"**Versão:** {versao}"
     )
     st.info(relatorio.resumo)
 
@@ -182,15 +190,48 @@ def render_relatorio(relatorio: RelatorioConformidade) -> None:
     c4.metric("Não atendidos", counts["nao_atendido"])
     st.progress(counts["atendido"] / total, text=f"Conformidade plena: {counts['atendido']}/{total}")
 
+    st.markdown("#### Ajuste humano (opcional)")
+    st.caption("Altere o status e/ou motivo e clique em aplicar para gerar a versão revisada.")
+    overrides: list[dict] = []
+    for item in relatorio.itens:
+        with st.expander(
+            f"{item.numero}. [{item.status.value}] ({item.fonte}) {item.descricao[:80]}…",
+            expanded=False,
+        ):
+            status_opts = ["atendido", "parcial", "nao_atendido"]
+            new_status = st.selectbox(
+                "Status",
+                options=status_opts,
+                index=status_opts.index(item.status.value),
+                key=f"rev_status_{item.numero}_{relatorio.revisado}",
+            )
+            new_motivo = st.text_area(
+                "Motivo",
+                value=item.motivo,
+                key=f"rev_motivo_{item.numero}_{relatorio.revisado}",
+                height=80,
+            )
+            if item.documentos_relacionados:
+                st.caption("Arquivos: " + ", ".join(item.documentos_relacionados))
+            overrides.append(
+                {"numero": item.numero, "status": new_status, "motivo": new_motivo}
+            )
+
+    if st.button("Aplicar revisão e atualizar relatório", type="primary"):
+        st.session_state.relatorio = aplicar_revisao_humana(relatorio, overrides)
+        st.success("Revisão aplicada. Baixe o relatório atualizado abaixo.")
+        st.rerun()
+
     md = relatorio_para_markdown(relatorio)
     xlsx = relatorio_para_xlsx(relatorio)
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
+    suffix = "_revisado" if relatorio.revisado else ""
     dl_md, dl_xlsx = st.columns(2)
     with dl_md:
         st.download_button(
             "Baixar relatório (.md)",
             data=md.encode("utf-8"),
-            file_name=f"relatorio_conformidade_{stamp}.md",
+            file_name=f"relatorio_conformidade{suffix}_{stamp}.md",
             mime="text/markdown",
             use_container_width=True,
         )
@@ -198,7 +239,7 @@ def render_relatorio(relatorio: RelatorioConformidade) -> None:
         st.download_button(
             "Baixar relatório (.xlsx)",
             data=xlsx,
-            file_name=f"relatorio_conformidade_{stamp}.xlsx",
+            file_name=f"relatorio_conformidade{suffix}_{stamp}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
         )

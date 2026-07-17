@@ -10,20 +10,18 @@ from pathlib import Path
 import gradio as gr
 import spaces
 
-from conformidade.analyzer import StatusConformidade, analisar_conformidade
+from conformidade.analyzer import analisar_conformidade
 from conformidade.checklist import TipoEntidade, label_tipo, load_checklist
 from conformidade.config import load_settings
 from conformidade.llm import OllamaError, check_llm_health, resolve_backend
 from conformidade.loaders import load_from_zip, ocr_available, scan_folder
+from conformidade.models import (
+    RelatorioConformidade,
+    StatusConformidade,
+    aplicar_revisao_humana,
+)
 from conformidade.report import relatorio_para_markdown, relatorio_para_xlsx
 
-STATUS_PT = {
-    StatusConformidade.ATENDIDO: "ATENDIDO",
-    StatusConformidade.PARCIAL: "PARCIAL",
-    StatusConformidade.NAO_ATENDIDO: "NÃO ATENDIDO",
-}
-
-# Cores: verde / amarelo / vermelho
 STATUS_BADGE = {
     StatusConformidade.ATENDIDO: (
         '<span style="display:inline-block;padding:2px 10px;border-radius:999px;'
@@ -38,6 +36,8 @@ STATUS_BADGE = {
         'background:#ffc7ce;color:#9c0006;font-weight:700;font-size:0.85em;">NÃO ATENDIDO</span>'
     ),
 }
+
+STATUS_CHOICES = ["atendido", "parcial", "nao_atendido"]
 
 
 def _system_status() -> str:
@@ -54,12 +54,68 @@ def _system_status() -> str:
 
 @spaces.GPU(duration=60)
 def _zerogpu_ping() -> str:
-    """Satisfaz o requisito do hardware ZeroGPU (análise real roda em CPU + HF API)."""
     return "ok"
 
 
+def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
+    counts = relatorio.contagem
+    versao = "revisada" if relatorio.revisado else "automática"
+    lines = [
+        f"## Resultado — {label_tipo(relatorio.tipo)} ({versao})",
+        f"**Entidade:** {relatorio.entidade_detectada}",
+        "",
+        relatorio.resumo,
+        "",
+        (
+            f'- <span style="color:#006100;font-weight:700;">Atendidos: {counts["atendido"]}</span> · '
+            f'<span style="color:#9c5700;font-weight:700;">Parciais: {counts["parcial"]}</span> · '
+            f'<span style="color:#9c0006;font-weight:700;">Não atendidos: {counts["nao_atendido"]}</span>'
+        ),
+        "",
+        "---",
+        "",
+    ]
+    for item in relatorio.itens:
+        badge = STATUS_BADGE[item.status]
+        lines.append(
+            f"### {item.numero}. {badge} "
+            f"<small style='color:#666'>({item.fonte})</small> {item.descricao}"
+        )
+        lines.append(f"**Motivo:** {item.motivo}")
+        if item.documentos_relacionados:
+            lines.append("**Arquivos:** " + ", ".join(item.documentos_relacionados))
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _relatorio_to_editor_rows(relatorio: RelatorioConformidade) -> list[list]:
+    rows = []
+    for item in relatorio.itens:
+        rows.append(
+            [
+                item.numero,
+                item.status.value,
+                item.fonte,
+                item.descricao[:120] + ("…" if len(item.descricao) > 120 else ""),
+                item.motivo,
+                ", ".join(item.documentos_relacionados),
+            ]
+        )
+    return rows
+
+
+def _export_files(relatorio: RelatorioConformidade, work: Path | None = None) -> tuple[str, str]:
+    out_dir = (work or Path(tempfile.mkdtemp(prefix="conf_out_"))) / "saida"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    suffix = "_revisado" if relatorio.revisado else ""
+    md_path = out_dir / f"relatorio_conformidade{suffix}.md"
+    xlsx_path = out_dir / f"relatorio_conformidade{suffix}.xlsx"
+    md_path.write_text(relatorio_para_markdown(relatorio), encoding="utf-8")
+    xlsx_path.write_bytes(relatorio_para_xlsx(relatorio))
+    return str(md_path), str(xlsx_path)
+
+
 def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
-    """OCR + checklist + LLM via HF Inference (sem GPU longa)."""
     if zip_file is None:
         raise gr.Error("Envie um arquivo ZIP com a documentação.")
 
@@ -74,86 +130,81 @@ def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
         else TipoEntidade.ASSOCIACAO
     )
     checklist = load_checklist(settings.checklists_path, tipo)
-
     work = Path(tempfile.mkdtemp(prefix="conformidade_"))
+
+    zip_path = Path(zip_file) if isinstance(zip_file, str) else Path(zip_file.name)
+    local_zip = work / (zip_path.name or f"upload_{uuid.uuid4().hex}.zip")
+    shutil.copy2(zip_path, local_zip)
+
+    progress(0.08, desc="Extraindo e lendo documentos (OCR se necessário)...")
+    documents = load_from_zip(local_zip, work / "extraidos")
+    if not documents:
+        documents = scan_folder(work)
+    if not documents:
+        raise gr.Error("Nenhum documento legível encontrado no ZIP.")
+
+    def on_progress(msg: str) -> None:
+        progress(0.2, desc=msg)
+
     try:
-        zip_path = Path(zip_file) if isinstance(zip_file, str) else Path(zip_file.name)
-        # Gradio pode entregar caminho temporário; copia para pasta de trabalho
-        local_zip = work / (zip_path.name or f"upload_{uuid.uuid4().hex}.zip")
-        shutil.copy2(zip_path, local_zip)
-
-        progress(0.1, desc="Extraindo e lendo documentos (OCR se necessário)...")
-        documents = load_from_zip(local_zip, work / "extraidos")
-        if not documents:
-            # fallback: se o upload não for zip válido, tenta pasta
-            documents = scan_folder(work)
-        if not documents:
-            raise gr.Error("Nenhum documento legível encontrado no ZIP.")
-
-        total_batches = max(1, (len(checklist.itens) + 2) // 3)
-        state = {"n": 0}
-
-        def on_progress(msg: str) -> None:
-            state["n"] = min(state["n"] + 1, total_batches)
-            progress(0.15 + 0.8 * (state["n"] / total_batches), desc=msg)
-
-        progress(0.15, desc="Analisando conformidade com o modelo...")
-        try:
-            relatorio = analisar_conformidade(
-                settings, checklist, documents, on_progress=on_progress
-            )
-        except (OllamaError, ValueError) as exc:
-            raise gr.Error(str(exc)) from exc
-
-        counts = relatorio.contagem
-        lines = [
-            f"## Resultado — {label_tipo(relatorio.tipo)}",
-            f"**Entidade:** {relatorio.entidade_detectada}",
-            "",
-            relatorio.resumo,
-            "",
-            (
-                f'- <span style="color:#006100;font-weight:700;">Atendidos: {counts["atendido"]}</span> · '
-                f'<span style="color:#9c5700;font-weight:700;">Parciais: {counts["parcial"]}</span> · '
-                f'<span style="color:#9c0006;font-weight:700;">Não atendidos: {counts["nao_atendido"]}</span>'
-            ),
-            "",
-            "---",
-            "",
-        ]
-        for item in relatorio.itens:
-            badge = STATUS_BADGE[item.status]
-            lines.append(f"### {item.numero}. {badge} {item.descricao}")
-            lines.append(f"**Motivo:** {item.motivo}")
-            if item.documentos_relacionados:
-                lines.append("**Arquivos:** " + ", ".join(item.documentos_relacionados))
-            lines.append("")
-
-        out_dir = work / "saida"
-        out_dir.mkdir(exist_ok=True)
-        md_path = out_dir / "relatorio_conformidade.md"
-        xlsx_path = out_dir / "relatorio_conformidade.xlsx"
-        md_path.write_text(relatorio_para_markdown(relatorio), encoding="utf-8")
-        xlsx_path.write_bytes(relatorio_para_xlsx(relatorio))
-
-        inventory = "\n".join(
-            f"- {d.relative_path} ({d.extraction_method}, {len(d.content)} chars)"
-            for d in documents
+        relatorio = analisar_conformidade(
+            settings, checklist, documents, on_progress=on_progress
         )
-        progress(1.0, desc="Concluído")
-        return "\n".join(lines), inventory, str(md_path), str(xlsx_path)
-    finally:
-        # Mantém pasta até o Gradio servir os downloads; limpeza fica com /tmp do Space
-        pass
+    except (OllamaError, ValueError) as exc:
+        raise gr.Error(str(exc)) from exc
+
+    inventory = "\n".join(
+        f"- {d.relative_path} ({d.extraction_method}, {len(d.content)} chars)"
+        for d in documents
+    )
+    md_path, xlsx_path = _export_files(relatorio, work)
+    progress(1.0, desc="Concluído — ajuste os status abaixo se necessário")
+    return (
+        _format_relatorio_md(relatorio),
+        inventory,
+        _relatorio_to_editor_rows(relatorio),
+        relatorio.to_dict(),
+        md_path,
+        xlsx_path,
+    )
+
+
+def aplicar_revisao(editor_rows, state_dict):
+    if not state_dict:
+        raise gr.Error("Execute a análise antes de revisar.")
+    if not editor_rows:
+        raise gr.Error("Tabela de revisão vazia.")
+
+    relatorio = RelatorioConformidade.from_dict(state_dict)
+    overrides = []
+    for row in editor_rows:
+        if not row or len(row) < 5:
+            continue
+        overrides.append(
+            {
+                "numero": row[0],
+                "status": row[1],
+                "motivo": row[4],
+            }
+        )
+    revisado = aplicar_revisao_humana(relatorio, overrides)
+    md_path, xlsx_path = _export_files(revisado)
+    return (
+        _format_relatorio_md(revisado),
+        _relatorio_to_editor_rows(revisado),
+        revisado.to_dict(),
+        md_path,
+        xlsx_path,
+    )
 
 
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="CODEVASF 12ª SR — Conformidade Documental") as demo:
+        state = gr.State(None)
         gr.Markdown(
             """
 # CODEVASF 12ª SR — Análise de Conformidade Documental
-Compare o ZIP do requerimento com a Lista de Documentos (Prefeitura ou Associação).
-Ferramenta **assistiva** — a decisão final é da equipe técnica.
+1. Envie o ZIP · 2. Analise (regras + IA) · 3. Ajuste status se precisar · 4. Baixe o relatório
 """
         )
         with gr.Accordion("Status do sistema", open=False):
@@ -171,8 +222,20 @@ Ferramenta **assistiva** — a decisão final é da equipe técnica.
         zip_in = gr.File(label="ZIP com a documentação", file_types=[".zip"])
         btn = gr.Button("Analisar conformidade", variant="primary")
 
-        resultado = gr.Markdown(label="Resultado")
-        inventario = gr.Textbox(label="Inventário dos arquivos", lines=8)
+        resultado = gr.Markdown()
+        inventario = gr.Textbox(label="Inventário dos arquivos", lines=6)
+
+        gr.Markdown("### Ajuste humano (opcional)")
+        editor = gr.Dataframe(
+            headers=["Nº", "Status", "Fonte", "Descrição", "Motivo", "Arquivos"],
+            datatype=["number", "str", "str", "str", "str", "str"],
+            col_count=(6, "fixed"),
+            interactive=True,
+            label="Edite a coluna Status (atendido | parcial | nao_atendido) e/ou Motivo",
+            wrap=True,
+        )
+        btn_revisar = gr.Button("Aplicar revisão e gerar relatório revisado")
+
         with gr.Row():
             md_out = gr.File(label="Relatório .md")
             xlsx_out = gr.File(label="Relatório .xlsx")
@@ -180,10 +243,16 @@ Ferramenta **assistiva** — a decisão final é da equipe técnica.
         btn.click(
             fn=analisar,
             inputs=[tipo, zip_in],
-            outputs=[resultado, inventario, md_out, xlsx_out],
+            outputs=[resultado, inventario, editor, state, md_out, xlsx_out],
+        )
+        btn_revisar.click(
+            fn=aplicar_revisao,
+            inputs=[editor, state],
+            outputs=[resultado, editor, state, md_out, xlsx_out],
         )
         gr.Markdown(
-            "CODEVASF — 12ª Superintendência Regional (Natal/RN) · Uso assistivo"
+            "CODEVASF — 12ª Superintendência Regional (Natal/RN) · "
+            "Regras automáticas + IA · Ajuste humano opcional"
         )
     return demo
 

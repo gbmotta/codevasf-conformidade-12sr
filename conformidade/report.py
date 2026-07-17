@@ -39,12 +39,16 @@ def relatorio_para_markdown(relatorio: RelatorioConformidade) -> str:
         f"- **Atendidos:** {counts['atendido']}",
         f"- **Parciais:** {counts['parcial']}",
         f"- **Não atendidos:** {counts['nao_atendido']}",
+        f"- **Versão:** {'revisada (ajuste humano)' if relatorio.revisado else 'automática'}",
         "",
         "## Itens do checklist",
         "",
     ]
     for item in relatorio.itens:
-        lines.append(f"### {item.numero}. [{STATUS_LABEL[item.status]}] {item.descricao}")
+        lines.append(
+            f"### {item.numero}. [{STATUS_LABEL[item.status]}] "
+            f"({item.fonte}) {item.descricao}"
+        )
         lines.append("")
         lines.append(f"**Motivo:** {item.motivo}")
         if item.documentos_relacionados:
@@ -105,6 +109,7 @@ def relatorio_para_xlsx(relatorio: RelatorioConformidade) -> bytes:
         ("Atendidos", counts["atendido"]),
         ("Parciais", counts["parcial"]),
         ("Não atendidos", counts["nao_atendido"]),
+        ("Versão", "Revisada (humano)" if relatorio.revisado else "Automática"),
     ]
     for row_idx, (label, value) in enumerate(resumo_rows, start=3):
         cell_a = ws_resumo.cell(row=row_idx, column=1, value=label)
@@ -120,7 +125,7 @@ def relatorio_para_xlsx(relatorio: RelatorioConformidade) -> bytes:
 
     # Aba de itens
     ws_itens = wb.create_sheet("Itens")
-    headers = ["Nº", "Status", "Descrição do item", "Motivo", "Arquivos relacionados"]
+    headers = ["Nº", "Status", "Fonte", "Descrição do item", "Motivo", "Arquivos relacionados"]
     for col, title in enumerate(headers, start=1):
         cell = ws_itens.cell(row=1, column=col, value=title)
         cell.font = header_font
@@ -132,6 +137,7 @@ def relatorio_para_xlsx(relatorio: RelatorioConformidade) -> bytes:
         values = [
             item.numero,
             STATUS_LABEL[item.status],
+            item.fonte,
             item.descricao,
             item.motivo,
             ", ".join(item.documentos_relacionados),
@@ -145,10 +151,10 @@ def relatorio_para_xlsx(relatorio: RelatorioConformidade) -> bytes:
                 cell.font = Font(bold=True)
         ws_itens.row_dimensions[row_idx].height = 45
 
-    widths = [6, 14, 55, 55, 40]
+    widths = [6, 14, 10, 50, 50, 35]
     for idx, width in enumerate(widths, start=1):
         ws_itens.column_dimensions[get_column_letter(idx)].width = width
-    ws_itens.auto_filter.ref = f"A1:E{max(1, len(relatorio.itens) + 1)}"
+    ws_itens.auto_filter.ref = f"A1:F{max(1, len(relatorio.itens) + 1)}"
     ws_itens.freeze_panes = "A2"
 
     # Aba de documentos
