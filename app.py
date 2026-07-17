@@ -50,6 +50,7 @@ from conformidade.models import (
     RelatorioConformidade,
     StatusConformidade,
     aplicar_revisao_humana,
+    normalize_status,
 )
 from conformidade.report import (
     relatorio_para_docx,
@@ -70,7 +71,30 @@ STATUS_BADGE = {
     ),
 }
 
-STATUS_CHOICES = ["atendido", "parcial", "nao_atendido"]
+STATUS_CHOICES = ["Atendido", "Parcial", "Não atendido"]
+
+STATUS_DISPLAY = {
+    StatusConformidade.ATENDIDO: "Atendido",
+    StatusConformidade.PARCIAL: "Parcial",
+    StatusConformidade.NAO_ATENDIDO: "Não atendido",
+}
+
+
+def _status_label(status: StatusConformidade | str) -> str:
+    if isinstance(status, StatusConformidade):
+        return STATUS_DISPLAY[status]
+    try:
+        return STATUS_DISPLAY[StatusConformidade(str(status))]
+    except ValueError:
+        return STATUS_DISPLAY[normalize_status(str(status))]
+
+
+def _capitalize_sentence(text: str | None) -> str:
+    """Garante inicial maiúscula em textos da revisão humana."""
+    value = (text or "").strip()
+    if not value:
+        return ""
+    return value[0].upper() + value[1:]
 
 
 def _system_status() -> str:
@@ -198,12 +222,13 @@ def _inventario_html(documents: list[LoadedDocument]) -> str:
             ".tif": "Img",
             ".tiff": "Img",
         }.get(ext, ext.replace(".", "").upper() or "Arq")
+        chars = f"{len(doc.content):,}".replace(",", ".")
         rows.append(
             "<li>"
             f'<span class="cv-inv-kind">{kind}</span>'
-            f"<span class=\"cv-inv-name\">{doc.relative_path}</span>"
+            f'<span class="cv-inv-name">{doc.relative_path}</span>'
             f"{badge}"
-            f'<span class="cv-inv-meta">{len(doc.content)} chars</span>'
+            f'<span class="cv-inv-meta">{chars} caracteres</span>'
             "</li>"
         )
     rows.append("</ul></div>")
@@ -249,7 +274,7 @@ def _empty_analysis_outputs():
         gr.update(visible=True),  # painel envio
         gr.update(visible=False),  # painel resultado
         gr.update(choices=[], value=None),  # item select
-        gr.update(value="atendido"),
+        gr.update(value="Atendido"),
         gr.update(value=""),
     )
 
@@ -364,8 +389,16 @@ def analisar(tipo_label: str, zip_file):
         gr.update(visible=False),
         gr.update(visible=True),
         gr.update(choices=choices, value=first),
-        gr.update(value=first_item.status.value if first_item else "atendido"),
-        gr.update(value=first_item.motivo if first_item else ""),
+        gr.update(
+            value=_status_label(first_item.status)
+            if first_item
+            else "Atendido"
+        ),
+        gr.update(
+            value=_capitalize_sentence(first_item.motivo)
+            if first_item
+            else ""
+        ),
     )
 
 
@@ -387,7 +420,10 @@ def carregar_item_revisao(item_label: str, state_dict):
     numero = _parse_item_numero(item_label)
     for item in relatorio.itens:
         if item.numero == numero:
-            return item.status.value, item.motivo
+            return (
+                _status_label(item.status),
+                _capitalize_sentence(item.motivo),
+            )
     return gr.update(), gr.update()
 
 
@@ -401,7 +437,13 @@ def salvar_item_revisao(item_label: str, status: str, motivo: str, state_dict):
     relatorio = RelatorioConformidade.from_dict(state_dict)
     revisado = aplicar_revisao_humana(
         relatorio,
-        [{"numero": numero, "status": status, "motivo": motivo}],
+        [
+            {
+                "numero": numero,
+                "status": status,
+                "motivo": _capitalize_sentence(motivo),
+            }
+        ],
     )
     return (
         revisado.to_dict(),
@@ -699,7 +741,7 @@ def build_ui() -> gr.Blocks:
                     ):
                         status_dd = gr.Dropdown(
                             choices=STATUS_CHOICES,
-                            value="atendido",
+                            value="Atendido",
                             label="Status",
                             scale=1,
                             elem_classes=["cv-rev-status"],
@@ -710,8 +752,7 @@ def build_ui() -> gr.Blocks:
                             lines=3,
                             scale=3,
                             placeholder=(
-                                "Informe de maneira objetiva a razão "
-                                "da classificação."
+                                "Explicação objetiva da classificação."
                             ),
                         )
 

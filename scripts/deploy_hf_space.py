@@ -113,7 +113,7 @@ def deploy(username: str, space_name: str, token: str) -> str:
         repo_id=repo_id,
         repo_type="space",
         token=token,
-        commit_message="UI institucional: cabeçalho compacto, coluna única e exports",
+        commit_message="UI: status/justificativa capitalizados e inventário alinhado",
     )
 
     try:

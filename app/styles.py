@@ -1604,6 +1604,7 @@ body {
 }
 
 .cv-inventory ul {
+  list-style: none;
   margin: 0;
   padding: 0;
 }
@@ -1611,11 +1612,14 @@ body {
 .cv-inventory li {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) auto auto;
-  min-height: 42px;
-  padding: 0.45rem 1rem;
-  gap: 0.65rem;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.55rem 1rem;
+  gap: 0.75rem;
   border-bottom: 1px solid #e5e9ee;
   font-size: 0.82rem;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 
 .cv-inventory li:last-child {
@@ -1623,24 +1627,46 @@ body {
 }
 
 .cv-inv-kind {
-  min-width: auto;
-  padding: 0.15rem 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  min-width: 2.6rem;
+  height: 1.45rem;
+  padding: 0 0.4rem;
   border-radius: 4px;
   background: #005ca8;
+  color: #ffffff;
   font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .cv-inv-name {
+  display: block;
   overflow: hidden;
+  align-self: center;
   color: #344256;
   text-overflow: ellipsis;
   white-space: nowrap;
   word-break: normal;
+  line-height: 1.3;
 }
 
 .cv-inv-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  height: 1.45rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
   background: #edf3f8;
   color: #005ca8;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .cv-inv-badge.ocr {
@@ -1649,9 +1675,15 @@ body {
 }
 
 .cv-inv-meta {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
   color: #798596;
   font-size: 0.72rem;
+  line-height: 1;
   white-space: nowrap;
+  min-width: 5.5rem;
+  justify-content: flex-end;
 }
 
 /* ---------- Revisão humana ---------- */
@@ -2031,6 +2063,52 @@ GRADIO_CSS += r"""
   .cv-review-fields,
   .cv-review-actions {
     flex-direction: column !important;
+  }
+}
+"""
+
+GRADIO_CSS += r"""
+/* Inventário — alinhamento vertical reforçado */
+.cv-inventory li {
+  display: grid !important;
+  grid-template-columns: 48px minmax(0, 1fr) auto auto !important;
+  align-items: center !important;
+}
+
+.cv-inventory li > * {
+  align-self: center !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.cv-inv-kind,
+.cv-inv-badge,
+.cv-inv-meta {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 1.45rem !important;
+  line-height: 1 !important;
+}
+
+.cv-inv-meta {
+  justify-content: flex-end !important;
+}
+
+@media (max-width: 680px) {
+  .cv-inventory li {
+    grid-template-columns: 42px minmax(0, 1fr) !important;
+    row-gap: 0.35rem !important;
+  }
+
+  .cv-inv-badge,
+  .cv-inv-meta {
+    grid-column: 2 !important;
+    justify-self: start !important;
+  }
+
+  .cv-inv-meta {
+    justify-content: flex-start !important;
   }
 }
 """
