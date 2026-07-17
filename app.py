@@ -6,18 +6,11 @@ Uso principal:
   - Hugging Face Spaces (Gradio + ZeroGPU)
   - Execução local: ``python app.py`` → http://localhost:7860
 
-Fluxo da UI:
-  1. Usuário escolhe tipo (Prefeitura / Associação) e envia ZIP
-  2. Regras determinísticas + LLM avaliam a Lista de Documentos
-  3. Ajuste humano opcional e download (Texto / Excel / Word / PDF)
-
-Backends de IA (env ``LLM_BACKEND``):
-  - ``ollama``   — intranet / local
-  - ``zerogpu``  — Space HF (padrão no Space)
-  - ``hf``       — Inference Providers (créditos)
-  - ``auto``     — Ollama se disponível; senão HF/ZeroGPU
-
-Tema visual: ``app/styles.py`` (Manual de Identidade Visual Codevasf).
+Melhorias de UX:
+  - Fluxo pós-análise (oculta envio, destaca resultado)
+  - Cards de resumo + progresso por etapas
+  - Revisão com dropdown de status
+  - Inventário HTML
 """
 
 from __future__ import annotations
@@ -44,15 +37,15 @@ from app.styles import (
     GRADIO_CSS,
     gradio_theme,
     render_hero,
-    render_side_left,
-    render_side_right,
     render_steps,
 )
 from conformidade.analyzer import analisar_conformidade
 from conformidade.checklist import TipoEntidade, label_tipo, load_checklist
 from conformidade.config import load_settings
 from conformidade.llm import OllamaError, check_llm_health, resolve_backend
-from conformidade.loaders import load_from_zip, ocr_available, scan_folder
+from conformidade.loaders import LoadedDocument, load_from_zip, ocr_available, scan_folder
+from dataclasses import replace
+
 from conformidade.models import (
     RelatorioConformidade,
     StatusConformidade,
@@ -65,22 +58,15 @@ from conformidade.report import (
     relatorio_para_xlsx,
 )
 
-# Badges HTML alinhados à paleta institucional (verde / amarelo / vermelho)
 STATUS_BADGE = {
     StatusConformidade.ATENDIDO: (
-        '<span class="cv-badge cv-badge-ok" style="display:inline-block;padding:0.2rem 0.55rem;'
-        'border-radius:999px;background:#d9f2e3;color:#0b6b3a;font-weight:700;'
-        'font-size:0.78rem;">ATENDIDO</span>'
+        '<span class="cv-badge cv-badge-ok">ATENDIDO</span>'
     ),
     StatusConformidade.PARCIAL: (
-        '<span class="cv-badge cv-badge-parcial" style="display:inline-block;padding:0.2rem 0.55rem;'
-        'border-radius:999px;background:#fff1d6;color:#8a5a00;font-weight:700;'
-        'font-size:0.78rem;">PARCIAL</span>'
+        '<span class="cv-badge cv-badge-parcial">PARCIAL</span>'
     ),
     StatusConformidade.NAO_ATENDIDO: (
-        '<span class="cv-badge cv-badge-nao" style="display:inline-block;padding:0.2rem 0.55rem;'
-        'border-radius:999px;background:#fde2e2;color:#9b1c1c;font-weight:700;'
-        'font-size:0.78rem;">NÃO ATENDIDO</span>'
+        '<span class="cv-badge cv-badge-nao">NÃO ATENDIDO</span>'
     ),
 }
 
@@ -108,34 +94,70 @@ def _system_status() -> str:
 
 
 def _estimate_zerogpu_duration(_settings, _checklist, documents) -> int:
-    """Estima duração da reserva ZeroGPU (menor = melhor fila/cota)."""
     n = len(documents) if documents else 1
     return 60 if n <= 25 else 90
 
 
 @spaces.GPU(duration=_estimate_zerogpu_duration)
 def _analisar_com_zerogpu(settings, checklist, documents):
-    """Roda a análise inteira em uma única entrada GPU (Space HF)."""
     return analisar_conformidade(
         settings, checklist, documents, batch_size=10, on_progress=None
     )
 
 
-def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
-    """Monta o Markdown exibido na área de resultado (com badges HTML)."""
+def _progress_html(step: int) -> str:
+    """Barra de etapas: 1 extração · 2 regras · 3 IA · 4 relatório."""
+    labels = [
+        (1, "Extração"),
+        (2, "Regras"),
+        (3, "IA"),
+        (4, "Relatório"),
+    ]
+    parts = ['<div class="cv-progress" aria-label="Progresso da análise">']
+    for num, label in labels:
+        cls = "done" if num < step else ("active" if num == step else "todo")
+        parts.append(
+            f'<div class="cv-progress-step {cls}">'
+            f'<span class="cv-progress-num">{num}</span>{label}</div>'
+        )
+        if num < 4:
+            parts.append('<div class="cv-progress-sep"></div>')
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def _resumo_cards_html(relatorio: RelatorioConformidade) -> str:
     counts = relatorio.contagem
     versao = "revisada" if relatorio.revisado else "automática"
+    return f"""
+<div class="cv-resumo">
+  <div class="cv-resumo-head">
+    <strong>{label_tipo(relatorio.tipo)}</strong>
+    <span>{relatorio.entidade_detectada} · análise {versao}</span>
+  </div>
+  <div class="cv-cards">
+    <div class="cv-card-stat ok">
+      <span class="cv-card-num">{counts["atendido"]}</span>
+      <span class="cv-card-label">Atendidos</span>
+    </div>
+    <div class="cv-card-stat parcial">
+      <span class="cv-card-num">{counts["parcial"]}</span>
+      <span class="cv-card-label">Parciais</span>
+    </div>
+    <div class="cv-card-stat nao">
+      <span class="cv-card-num">{counts["nao_atendido"]}</span>
+      <span class="cv-card-label">Não atendidos</span>
+    </div>
+  </div>
+</div>
+"""
+
+
+def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
     lines = [
-        f"## Resultado — {label_tipo(relatorio.tipo)} ({versao})",
-        f"**Entidade:** {relatorio.entidade_detectada}",
+        f"## Detalhamento dos itens",
         "",
         relatorio.resumo,
-        "",
-        (
-            f'- <span style="color:#0b6b3a;font-weight:700;">Atendidos: {counts["atendido"]}</span> · '
-            f'<span style="color:#8a5a00;font-weight:700;">Parciais: {counts["parcial"]}</span> · '
-            f'<span style="color:#9b1c1c;font-weight:700;">Não atendidos: {counts["nao_atendido"]}</span>'
-        ),
         "",
         "---",
         "",
@@ -153,27 +175,52 @@ def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
     return "\n".join(lines)
 
 
-def _relatorio_to_editor_rows(relatorio: RelatorioConformidade) -> list[list]:
-    """Converte o relatório em linhas editáveis do Dataframe de revisão."""
-    rows = []
-    for item in relatorio.itens:
-        rows.append(
-            [
-                item.numero,
-                item.status.value,
-                item.fonte,
-                item.descricao[:120] + ("…" if len(item.descricao) > 120 else ""),
-                item.motivo,
-                ", ".join(item.documentos_relacionados),
-            ]
+def _inventario_html(documents: list[LoadedDocument]) -> str:
+    if not documents:
+        return '<p class="cv-muted">Nenhum arquivo no inventário.</p>'
+    rows = ['<div class="cv-inventory"><h3>Inventário dos arquivos</h3><ul>']
+    for doc in documents:
+        ext = Path(doc.file_name).suffix.lower() or "?"
+        method = (doc.extraction_method or "texto").lower()
+        ocr = method in {"ocr", "hibrido"}
+        badge = (
+            '<span class="cv-inv-badge ocr">OCR</span>'
+            if ocr
+            else '<span class="cv-inv-badge">Texto</span>'
         )
-    return rows
+        kind = {
+            ".pdf": "PDF",
+            ".docx": "Word",
+            ".doc": "Word",
+            ".png": "Img",
+            ".jpg": "Img",
+            ".jpeg": "Img",
+            ".tif": "Img",
+            ".tiff": "Img",
+        }.get(ext, ext.replace(".", "").upper() or "Arq")
+        rows.append(
+            "<li>"
+            f'<span class="cv-inv-kind">{kind}</span>'
+            f"<span class=\"cv-inv-name\">{doc.relative_path}</span>"
+            f"{badge}"
+            f'<span class="cv-inv-meta">{len(doc.content)} chars</span>'
+            "</li>"
+        )
+    rows.append("</ul></div>")
+    return "".join(rows)
+
+
+def _item_choices(relatorio: RelatorioConformidade) -> list[str]:
+    return [
+        f"{item.numero} — {item.descricao[:70]}"
+        + ("…" if len(item.descricao) > 70 else "")
+        for item in relatorio.itens
+    ]
 
 
 def _export_files(
     relatorio: RelatorioConformidade, work: Path | None = None
 ) -> tuple[str, str, str, str]:
-    """Gera os quatro arquivos de exportação e devolve os caminhos."""
     out_dir = (work or Path(tempfile.mkdtemp(prefix="conf_out_"))) / "saida"
     out_dir.mkdir(parents=True, exist_ok=True)
     suffix = "_revisado" if relatorio.revisado else ""
@@ -188,8 +235,27 @@ def _export_files(
     return str(md_path), str(xlsx_path), str(docx_path), str(pdf_path)
 
 
-def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
-    """Callback principal: ZIP → análise → relatório + arquivos para download."""
+def _empty_analysis_outputs():
+    return (
+        "",  # progresso
+        "",  # cards
+        "",  # resultado
+        "",  # inventario
+        None,  # state
+        None,
+        None,
+        None,
+        None,  # files
+        gr.update(visible=True),  # painel envio
+        gr.update(visible=False),  # painel resultado
+        gr.update(choices=[], value=None),  # item select
+        gr.update(value="atendido"),
+        gr.update(value=""),
+    )
+
+
+def analisar(tipo_label: str, zip_file):
+    """ZIP → análise (gerador com progresso por etapas)."""
     if zip_file is None:
         raise gr.Error("Envie um arquivo ZIP com a documentação.")
 
@@ -210,41 +276,152 @@ def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
     local_zip = work / (zip_path.name or f"upload_{uuid.uuid4().hex}.zip")
     shutil.copy2(zip_path, local_zip)
 
-    progress(0.08, desc="Extraindo e lendo documentos (OCR se necessário)...")
+    # Etapa 1 — Extração
+    yield (
+        _progress_html(1),
+        "",
+        "Extraindo e lendo documentos (OCR se necessário)...",
+        "",
+        None,
+        None,
+        None,
+        None,
+        None,
+        gr.update(visible=True),
+        gr.update(visible=False),
+        gr.update(),
+        gr.update(),
+        gr.update(),
+    )
+
     documents = load_from_zip(local_zip, work / "extraidos")
     if not documents:
         documents = scan_folder(work)
     if not documents:
         raise gr.Error("Nenhum documento legível encontrado no ZIP.")
 
-    def on_progress(msg: str) -> None:
-        progress(0.2, desc=msg)
+    # Etapa 2 — Regras
+    yield (
+        _progress_html(2),
+        "",
+        "Aplicando regras determinísticas (nome/conteúdo)...",
+        _inventario_html(documents),
+        None,
+        None,
+        None,
+        None,
+        None,
+        gr.update(visible=True),
+        gr.update(visible=False),
+        gr.update(),
+        gr.update(),
+        gr.update(),
+    )
+
+    # Etapa 3 — IA
+    yield (
+        _progress_html(3),
+        "",
+        "Avaliando itens pendentes com IA...",
+        _inventario_html(documents),
+        None,
+        None,
+        None,
+        None,
+        None,
+        gr.update(visible=True),
+        gr.update(visible=False),
+        gr.update(),
+        gr.update(),
+        gr.update(),
+    )
 
     try:
         backend = resolve_backend(settings)
         if backend == "zerogpu":
-            progress(
-                0.25,
-                desc="IA no ZeroGPU (1ª execução pode baixar o modelo; ~1 min)...",
-            )
             relatorio = _analisar_com_zerogpu(settings, checklist, documents)
         else:
-            relatorio = analisar_conformidade(
-                settings, checklist, documents, on_progress=on_progress
-            )
+            relatorio = analisar_conformidade(settings, checklist, documents)
     except (OllamaError, ValueError) as exc:
         raise gr.Error(str(exc)) from exc
 
-    inventory = "\n".join(
-        f"- {d.relative_path} ({d.extraction_method}, {len(d.content)} chars)"
-        for d in documents
-    )
     md_path, xlsx_path, docx_path, pdf_path = _export_files(relatorio, work)
-    progress(1.0, desc="Concluído — ajuste os status abaixo se necessário")
-    return (
+    choices = _item_choices(relatorio)
+    first = choices[0] if choices else None
+    first_item = relatorio.itens[0] if relatorio.itens else None
+
+    # Etapa 4 — Relatório + troca de painel
+    yield (
+        _progress_html(4),
+        _resumo_cards_html(relatorio),
         _format_relatorio_md(relatorio),
-        inventory,
-        _relatorio_to_editor_rows(relatorio),
+        _inventario_html(documents),
+        relatorio.to_dict(),
+        md_path,
+        xlsx_path,
+        docx_path,
+        pdf_path,
+        gr.update(visible=False),
+        gr.update(visible=True),
+        gr.update(choices=choices, value=first),
+        gr.update(value=first_item.status.value if first_item else "atendido"),
+        gr.update(value=first_item.motivo if first_item else ""),
+    )
+
+
+def _parse_item_numero(label: str | None) -> int | None:
+    if not label:
+        return None
+    head = str(label).split("—", 1)[0].strip()
+    try:
+        return int(head)
+    except ValueError:
+        return None
+
+
+def carregar_item_revisao(item_label: str, state_dict):
+    """Preenche dropdown/motivo ao trocar o item selecionado."""
+    if not state_dict or not item_label:
+        return gr.update(), gr.update()
+    relatorio = RelatorioConformidade.from_dict(state_dict)
+    numero = _parse_item_numero(item_label)
+    for item in relatorio.itens:
+        if item.numero == numero:
+            return item.status.value, item.motivo
+    return gr.update(), gr.update()
+
+
+def salvar_item_revisao(item_label: str, status: str, motivo: str, state_dict):
+    """Atualiza um item no estado via dropdowns."""
+    if not state_dict:
+        raise gr.Error("Execute a análise antes de revisar.")
+    numero = _parse_item_numero(item_label)
+    if numero is None:
+        raise gr.Error("Selecione um item da lista.")
+    relatorio = RelatorioConformidade.from_dict(state_dict)
+    revisado = aplicar_revisao_humana(
+        relatorio,
+        [{"numero": numero, "status": status, "motivo": motivo}],
+    )
+    return (
+        revisado.to_dict(),
+        _resumo_cards_html(revisado),
+        _format_relatorio_md(revisado),
+        gr.update(choices=_item_choices(revisado), value=item_label),
+    )
+
+
+def gerar_relatorio_revisado(state_dict):
+    """Gera exports a partir do estado já revisado."""
+    if not state_dict:
+        raise gr.Error("Execute a análise antes de revisar.")
+    relatorio = RelatorioConformidade.from_dict(state_dict)
+    if not relatorio.revisado:
+        relatorio = replace(relatorio, revisado=True)
+    md_path, xlsx_path, docx_path, pdf_path = _export_files(relatorio)
+    return (
+        _resumo_cards_html(relatorio),
+        _format_relatorio_md(relatorio),
         relatorio.to_dict(),
         md_path,
         xlsx_path,
@@ -253,50 +430,27 @@ def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
     )
 
 
-def aplicar_revisao(editor_rows, state_dict):
-    """Aplica overrides humanos da tabela e regenera os exports."""
-    if not state_dict:
-        raise gr.Error("Execute a análise antes de revisar.")
-    if not editor_rows:
-        raise gr.Error("Tabela de revisão vazia.")
-
-    relatorio = RelatorioConformidade.from_dict(state_dict)
-    overrides = []
-    for row in editor_rows:
-        if not row or len(row) < 5:
-            continue
-        overrides.append(
-            {
-                "numero": row[0],
-                "status": row[1],
-                "motivo": row[4],
-            }
-        )
-    revisado = aplicar_revisao_humana(relatorio, overrides)
-    md_path, xlsx_path, docx_path, pdf_path = _export_files(revisado)
-    return (
-        _format_relatorio_md(revisado),
-        _relatorio_to_editor_rows(revisado),
-        revisado.to_dict(),
-        md_path,
-        xlsx_path,
-        docx_path,
-        pdf_path,
-    )
+def nova_analise():
+    """Volta ao formulário de envio."""
+    return _empty_analysis_outputs()
 
 
 def _gradio_major() -> int:
-    """Major version do Gradio (5: theme no Blocks; 6+: theme no launch)."""
     return int(gr.__version__.split(".", 1)[0])
 
 
 def build_ui() -> gr.Blocks:
-    """Monta o layout: laterais institucionais + área central de análise."""
+    """Monta a interface institucional em coluna única."""
+
     hero_html = render_hero(
-        "Compare o requerimento (ZIP) com a Lista de Documentos para doação de bens "
-        "móveis — Prefeituras ou Associações — com regras automáticas + IA."
+        "Verificação assistida dos documentos exigidos para doação "
+        "e concessão de bens móveis."
     )
-    blocks_kwargs: dict = {"title": "Codevasf 12ª SR — Conformidade Documental"}
+
+    blocks_kwargs: dict = {
+        "title": "Codevasf 12ª SR — Conformidade Documental"
+    }
+
     if _gradio_major() < 6:
         blocks_kwargs["theme"] = gradio_theme()
         blocks_kwargs["css"] = GRADIO_CSS
@@ -304,75 +458,399 @@ def build_ui() -> gr.Blocks:
     with gr.Blocks(**blocks_kwargs) as demo:
         state = gr.State(None)
 
-        with gr.Row(elem_classes=["cv-layout"]):
-            with gr.Column(scale=2, min_width=260, elem_classes=["cv-side"]):
-                gr.HTML(render_side_left())
+        # =========================================================
+        # CONTEÚDO PRINCIPAL
+        # =========================================================
 
-            with gr.Column(scale=5, elem_classes=["cv-main"]):
-                gr.HTML(hero_html)
-                gr.HTML(render_steps())
+        with gr.Column(elem_classes=["cv-main"]):
+            gr.HTML(hero_html)
+            gr.HTML(render_steps())
 
-                with gr.Accordion("Status do sistema", open=False):
-                    status = gr.Markdown(_system_status())
-                    gr.Button("Atualizar status", size="sm").click(
-                        fn=_system_status, outputs=status
-                    )
+            # -----------------------------------------------------
+            # AJUDA
+            # -----------------------------------------------------
 
-                with gr.Row():
-                    tipo = gr.Radio(
-                        choices=[
-                            "Prefeitura",
-                            "Associação / Cooperativa / Instituição pública",
-                        ],
-                        value="Prefeitura",
-                        label="Tipo de solicitante",
-                    )
-                    zip_in = gr.File(
-                        label="ZIP com a documentação", file_types=[".zip"]
-                    )
+            with gr.Accordion(
+                "Orientações de uso",
+                open=False,
+                elem_classes=["cv-help-accordion"],
+            ):
+                gr.HTML(
+                    """
+                    <div class="cv-help-content">
+                      <section class="cv-help-card">
+                        <span class="cv-help-number">1</span>
+                        <div>
+                          <strong>Prepare os documentos</strong>
+                          <p>
+                            Reúna os documentos do requerimento em um único
+                            arquivo ZIP.
+                          </p>
+                        </div>
+                      </section>
 
-                btn = gr.Button("Analisar conformidade", variant="primary")
+                      <section class="cv-help-card">
+                        <span class="cv-help-number">2</span>
+                        <div>
+                          <strong>Nomeie os arquivos claramente</strong>
+                          <p>
+                            Utilize nomes como oficio.pdf, ata_posse.pdf,
+                            cnpj.pdf e certidao_fgts.pdf.
+                          </p>
+                        </div>
+                      </section>
 
-                resultado = gr.Markdown()
-                inventario = gr.Textbox(label="Inventário dos arquivos", lines=5)
+                      <section class="cv-help-card">
+                        <span class="cv-help-number">3</span>
+                        <div>
+                          <strong>Revise o resultado</strong>
+                          <p>
+                            A ferramenta auxilia a análise, mas a decisão
+                            permanece com a equipe técnica.
+                          </p>
+                        </div>
+                      </section>
+                    </div>
 
-                gr.Markdown("### Ajuste humano (opcional)")
-                editor = gr.Dataframe(
-                    headers=["Nº", "Status", "Fonte", "Descrição", "Motivo", "Arquivos"],
-                    datatype=["number", "str", "str", "str", "str", "str"],
-                    col_count=(6, "fixed"),
-                    interactive=True,
-                    label="Edite Status (atendido | parcial | nao_atendido) e/ou Motivo",
-                    wrap=True,
+                    <div class="cv-help-note">
+                      <strong>O ZIP pode conter:</strong>
+                      ofício ou requerimento, documentos institucionais,
+                      documentos pessoais, certidões, comprovantes e anexos.
+                    </div>
+                    """
                 )
-                btn_revisar = gr.Button("Aplicar revisão e gerar relatório revisado")
 
-                with gr.Row(elem_classes=["cv-downloads"]):
-                    md_out = gr.File(label="Texto (.md)", elem_classes=["cv-download"])
-                    xlsx_out = gr.File(
-                        label="Excel (.xlsx)", elem_classes=["cv-download"]
-                    )
-                    docx_out = gr.File(
-                        label="Word (.docx)", elem_classes=["cv-download"]
-                    )
-                    pdf_out = gr.File(label="PDF (.pdf)", elem_classes=["cv-download"])
+            # -----------------------------------------------------
+            # STATUS TÉCNICO
+            # -----------------------------------------------------
+
+            with gr.Accordion(
+                "Status técnico do sistema",
+                open=False,
+                elem_classes=["cv-system-accordion"],
+            ):
+                status = gr.Markdown(_system_status())
+
+                btn_status = gr.Button(
+                    "Atualizar status",
+                    size="sm",
+                    elem_classes=["cv-btn-status"],
+                )
+
+                btn_status.click(
+                    fn=_system_status,
+                    outputs=status,
+                )
+
+            # Progresso dinâmico apresentado durante a análise
+            progresso = gr.HTML(
+                visible=True,
+                elem_classes=["cv-progress-wrap"],
+            )
+
+            # =====================================================
+            # PAINEL DE ENVIO
+            # =====================================================
+
+            with gr.Column(
+                visible=True,
+                elem_classes=["cv-painel-envio"],
+            ) as painel_envio:
 
                 gr.HTML(
-                    '<p class="cv-footer-note">Codevasf — 12ª Superintendência Regional '
-                    "(Natal/RN) · Regras automáticas + IA · Ajuste humano opcional · "
-                    "Identidade visual conforme manual institucional</p>"
+                    """
+                    <div class="cv-section-title">
+                      <h2>Enviar documentação</h2>
+                      <p>
+                        Selecione o tipo de solicitante e anexe o arquivo ZIP
+                        correspondente ao requerimento.
+                      </p>
+                    </div>
+                    """
                 )
 
-            with gr.Column(scale=2, min_width=260, elem_classes=["cv-side"]):
-                gr.HTML(render_side_right())
+                with gr.Row(
+                    elem_classes=["cv-input-row"],
+                    equal_height=True,
+                ):
+                    with gr.Column(
+                        scale=1,
+                        elem_classes=["cv-input-card"],
+                    ):
+                        tipo = gr.Radio(
+                            choices=[
+                                "Prefeitura",
+                                (
+                                    "Associação / Cooperativa / "
+                                    "Instituição pública"
+                                ),
+                            ],
+                            value="Prefeitura",
+                            label="Tipo de solicitante",
+                            elem_classes=["cv-tipo-radio"],
+                        )
+
+                    with gr.Column(
+                        scale=1,
+                        elem_classes=["cv-input-card"],
+                    ):
+                        zip_in = gr.File(
+                            label="ZIP com a documentação",
+                            file_types=[".zip"],
+                            elem_classes=["cv-zip-upload"],
+                            height=180,
+                        )
+
+                gr.HTML(
+                    """
+                    <div class="cv-upload-guidance">
+                      <strong>Antes de iniciar:</strong>
+                      confirme se o ZIP pertence ao solicitante selecionado e
+                      se os arquivos podem ser abertos normalmente.
+                    </div>
+                    """
+                )
+
+                btn = gr.Button(
+                    "Analisar conformidade",
+                    variant="primary",
+                    elem_classes=["cv-btn-analisar"],
+                )
+
+            # =====================================================
+            # PAINEL DE RESULTADO
+            # =====================================================
+
+            with gr.Column(
+                visible=False,
+                elem_classes=["cv-painel-resultado"],
+            ) as painel_resultado:
+
+                with gr.Row(
+                    elem_classes=["cv-result-toolbar"],
+                ):
+                    btn_nova = gr.Button(
+                        "← Nova análise",
+                        elem_classes=["cv-btn-nova"],
+                    )
+
+                    gr.HTML(
+                        """
+                        <div class="cv-result-toolbar-copy">
+                          <strong>Resultado da análise</strong>
+                          <span>
+                            Confira prioritariamente os itens parciais e
+                            não atendidos.
+                          </span>
+                        </div>
+                        """
+                    )
+
+                resumo_cards = gr.HTML()
+
+                # -------------------------------------------------
+                # DETALHAMENTO
+                # -------------------------------------------------
+
+                resultado = gr.Markdown(
+                    elem_classes=["cv-resultado"],
+                )
+
+                # -------------------------------------------------
+                # INVENTÁRIO
+                # -------------------------------------------------
+
+                with gr.Accordion(
+                    "Documentos analisados",
+                    open=False,
+                    elem_classes=["cv-inventory-accordion"],
+                ):
+                    inventario = gr.HTML()
+
+                # -------------------------------------------------
+                # REVISÃO HUMANA
+                # -------------------------------------------------
+
+                with gr.Accordion(
+                    "Revisão humana",
+                    open=True,
+                    elem_classes=["cv-review-accordion"],
+                ):
+                    gr.HTML(
+                        """
+                        <div class="cv-review-intro">
+                          <strong>Conferência da equipe técnica</strong>
+                          <p>
+                            Selecione um item, altere sua classificação quando
+                            necessário e registre uma justificativa objetiva.
+                          </p>
+                        </div>
+                        """
+                    )
+
+                    item_select = gr.Dropdown(
+                        choices=[],
+                        label="Item do checklist",
+                        elem_classes=["cv-rev-item"],
+                    )
+
+                    with gr.Row(
+                        elem_classes=["cv-review-fields"],
+                    ):
+                        status_dd = gr.Dropdown(
+                            choices=STATUS_CHOICES,
+                            value="atendido",
+                            label="Status",
+                            scale=1,
+                            elem_classes=["cv-rev-status"],
+                        )
+
+                        motivo_tb = gr.Textbox(
+                            label="Justificativa da classificação",
+                            lines=3,
+                            scale=3,
+                            placeholder=(
+                                "Informe de maneira objetiva a razão "
+                                "da classificação."
+                            ),
+                        )
+
+                    with gr.Row(
+                        elem_classes=["cv-review-actions"],
+                    ):
+                        btn_salvar_item = gr.Button(
+                            "Salvar alteração do item",
+                            elem_classes=["cv-btn-save-review"],
+                        )
+
+                        btn_revisar = gr.Button(
+                            "Atualizar relatório revisado",
+                            variant="primary",
+                            elem_classes=["cv-btn-generate-review"],
+                        )
+
+                # -------------------------------------------------
+                # EXPORTAÇÃO
+                # -------------------------------------------------
+
+                gr.HTML(
+                    """
+                    <div class="cv-export-heading">
+                      <h2>Exportar relatório</h2>
+                      <p>
+                        Utilize o PDF para conferência, o Word para edição e
+                        o Excel para tratamento dos dados.
+                      </p>
+                    </div>
+                    """
+                )
+
+                with gr.Row(elem_classes=["cv-downloads"]):
+                    md_out = gr.File(
+                        label="Markdown (.md)",
+                        elem_classes=[
+                            "cv-download",
+                            "cv-download-technical",
+                        ],
+                    )
+
+                    xlsx_out = gr.File(
+                        label="Planilha Excel (.xlsx)",
+                        elem_classes=["cv-download"],
+                    )
+
+                    docx_out = gr.File(
+                        label="Documento Word (.docx)",
+                        elem_classes=["cv-download"],
+                    )
+
+                    pdf_out = gr.File(
+                        label="Relatório PDF (.pdf)",
+                        elem_classes=[
+                            "cv-download",
+                            "cv-download-primary",
+                        ],
+                    )
+
+            # =====================================================
+            # RODAPÉ
+            # =====================================================
+
+            gr.HTML(
+                """
+                <footer class="cv-footer-note">
+                  Codevasf — 12ª Superintendência Regional · Natal/RN<br>
+                  Análise assistida por regras automáticas e inteligência
+                  artificial. A decisão final permanece com a equipe técnica.
+                </footer>
+                """
+            )
+
+        # =========================================================
+        # SAÍDAS DA ANÁLISE
+        # A ordem deve acompanhar os valores retornados por analisar()
+        # =========================================================
+
+        analysis_outputs = [
+            progresso,
+            resumo_cards,
+            resultado,
+            inventario,
+            state,
+            md_out,
+            xlsx_out,
+            docx_out,
+            pdf_out,
+            painel_envio,
+            painel_resultado,
+            item_select,
+            status_dd,
+            motivo_tb,
+        ]
+
+        # =========================================================
+        # EVENTOS
+        # =========================================================
 
         btn.click(
             fn=analisar,
             inputs=[tipo, zip_in],
+            outputs=analysis_outputs,
+        )
+
+        btn_nova.click(
+            fn=nova_analise,
+            outputs=analysis_outputs,
+        )
+
+        item_select.change(
+            fn=carregar_item_revisao,
+            inputs=[item_select, state],
+            outputs=[status_dd, motivo_tb],
+        )
+
+        btn_salvar_item.click(
+            fn=salvar_item_revisao,
+            inputs=[
+                item_select,
+                status_dd,
+                motivo_tb,
+                state,
+            ],
             outputs=[
+                state,
+                resumo_cards,
                 resultado,
-                inventario,
-                editor,
+                item_select,
+            ],
+        )
+
+        btn_revisar.click(
+            fn=gerar_relatorio_revisado,
+            inputs=[state],
+            outputs=[
+                resumo_cards,
+                resultado,
                 state,
                 md_out,
                 xlsx_out,
@@ -380,15 +858,10 @@ def build_ui() -> gr.Blocks:
                 pdf_out,
             ],
         )
-        btn_revisar.click(
-            fn=aplicar_revisao,
-            inputs=[editor, state],
-            outputs=[resultado, editor, state, md_out, xlsx_out, docx_out, pdf_out],
-        )
+
     return demo
 
 
-# Objeto esperado pelo runtime Gradio do Hugging Face Spaces
 demo = build_ui()
 
 

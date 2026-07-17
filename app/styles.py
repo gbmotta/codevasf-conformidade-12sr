@@ -112,11 +112,13 @@ header[data-testid="stHeader"] {{ background: transparent; }}
 }}
 .cv-logo {{
   display: block;
-  height: 52px;
+  height: 120px;
   width: auto;
-  margin: 0 auto 0.9rem auto;
-  border-radius: 6px;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  max-width: min(560px, 95%);
+  object-fit: contain;
+  margin: 0 auto 1.1rem auto;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.22);
 }}
 .cv-hero-kicker {{
   font-size: 0.78rem;
@@ -205,47 +207,104 @@ div[data-testid="stMetric"] {{
 @media (max-width: 900px) {{
   .cv-steps {{ grid-template-columns: 1fr; }}
   .cv-hero h1 {{ font-size: 1.3rem; }}
+  .cv-logo {{ height: 88px; }}
 }}
 </style>
 """
 
 
 def render_hero(subtitle: str | None = None) -> str:
+    """Cabeçalho compacto do sistema institucional."""
     body = subtitle or (
-        "Compare o requerimento enviado (ZIP ou pasta) com a Lista de Documentos "
-        "exigida para doação de bens móveis — Prefeituras ou Associações — "
-        "com apoio de IA local no servidor interno."
+        "Verificação assistida de documentos para doação e concessão "
+        "de bens móveis."
     )
+
     logo = logo_data_uri()
     logo_html = (
-        f'<img class="cv-logo" src="{logo}" alt="Marca Codevasf" />' if logo else ""
+        f'<img class="cv-app-logo" src="{logo}" alt="Codevasf" />'
+        if logo
+        else '<strong class="cv-app-logo-fallback">CODEVASF</strong>'
     )
+
     return f"""
-<div class="cv-hero">
-  {logo_html}
-  <p class="cv-hero-kicker">Codevasf · 12ª Superintendência Regional · Natal/RN</p>
-  <h1>Análise de Conformidade Documental</h1>
-  <p>{body}</p>
-</div>
+<header class="cv-app-header">
+  <div class="cv-app-header-main">
+    <div class="cv-app-brand">
+      {logo_html}
+
+      <div class="cv-app-identification">
+        <span class="cv-app-institution">
+          Companhia de Desenvolvimento dos Vales do São Francisco e do Parnaíba
+        </span>
+
+        <h1>Análise de Conformidade Documental</h1>
+
+        <p>
+          12ª Superintendência Regional · Natal/RN
+        </p>
+      </div>
+    </div>
+
+    <div class="cv-app-status" aria-label="Característica do sistema">
+      <span class="cv-app-status-dot"></span>
+      Sistema assistivo
+    </div>
+  </div>
+
+  <div class="cv-app-description">
+    <span>{body}</span>
+
+    <span class="cv-app-description-alert">
+      A decisão final permanece com a equipe técnica.
+    </span>
+  </div>
+</header>
 """
 
 
 def render_steps() -> str:
+    """Fluxo resumido e compacto da atividade."""
     return """
-<div class="cv-steps">
-  <div class="cv-step">
-    <strong><span class="cv-step-num">1</span>Tipo de solicitante</strong>
-    <span>Prefeitura ou Associação / Cooperativa</span>
+<nav class="cv-workflow" aria-label="Etapas da análise">
+  <div class="cv-workflow-item">
+    <span class="cv-workflow-number">1</span>
+    <span class="cv-workflow-content">
+      <strong>Envio</strong>
+      <small>Tipo e documentos</small>
+    </span>
   </div>
-  <div class="cv-step">
-    <strong><span class="cv-step-num">2</span>Documentos</strong>
-    <span>Envie o ZIP do requerimento ou informe a pasta</span>
+
+  <span class="cv-workflow-line"></span>
+
+  <div class="cv-workflow-item">
+    <span class="cv-workflow-number">2</span>
+    <span class="cv-workflow-content">
+      <strong>Leitura</strong>
+      <small>Extração e regras</small>
+    </span>
   </div>
-  <div class="cv-step">
-    <strong><span class="cv-step-num">3</span>Resultado</strong>
-    <span>Itens atendidos, parciais e pendentes com motivos</span>
+
+  <span class="cv-workflow-line"></span>
+
+  <div class="cv-workflow-item">
+    <span class="cv-workflow-number">3</span>
+    <span class="cv-workflow-content">
+      <strong>Análise</strong>
+      <small>Validação assistida</small>
+    </span>
   </div>
-</div>
+
+  <span class="cv-workflow-line"></span>
+
+  <div class="cv-workflow-item">
+    <span class="cv-workflow-number">4</span>
+    <span class="cv-workflow-content">
+      <strong>Revisão</strong>
+      <small>Conferência e relatório</small>
+    </span>
+  </div>
+</nav>
 """
 
 
@@ -318,9 +377,9 @@ def render_side_right() -> str:
 <aside class="cv-side-panel">
   <h3>Legenda</h3>
   <ul class="cv-legend">
-    <li><span class="cv-badge cv-badge-ok">Atendido</span> documento ok</li>
-    <li><span class="cv-badge cv-badge-parcial">Parcial</span> incompleto / dúvida</li>
-    <li><span class="cv-badge cv-badge-nao">Não atendido</span> ausente</li>
+    <li><span class="cv-badge cv-badge-ok">Atendido</span> Documento Ok</li>
+    <li><span class="cv-badge cv-badge-parcial">Parcial</span> Incompleto / Dúvida</li>
+    <li><span class="cv-badge cv-badge-nao">Não Atendido</span> Ausente</li>
   </ul>
   <h3>Como a análise funciona</h3>
   <ul class="cv-side-list">
@@ -330,10 +389,10 @@ def render_side_right() -> str:
   </ul>
   <h3>Exportação</h3>
   <ul class="cv-side-list plain">
-    <li>Texto (.md) — leitura rápida</li>
-    <li>Excel (.xlsx) — planilha</li>
-    <li>Word (.docx) — edição</li>
-    <li>PDF (.pdf) — arquivo oficial</li>
+    <li>Texto (.md) — Leitura Rápida</li>
+    <li>Excel (.xlsx) — Planilha</li>
+    <li>Word (.docx) — Edição</li>
+    <li>PDF (.pdf) — Arquivo Oficial</li>
   </ul>
   <h3>12ª SR</h3>
   <p class="cv-side-text">
@@ -366,10 +425,10 @@ body.gradio-container,
 }}
 .gradio-container {{
   font-family: {FONT_STACK} !important;
-  max-width: 100% !important;
+  max-width: 1600px !important;
   width: 100% !important;
-  margin: 0 !important;
-  padding: 0.85rem 1.25rem 1.5rem !important;
+  margin: 0 auto !important;
+  padding: 0.85rem 1rem 1.5rem !important;
   min-height: 100vh !important;
   box-sizing: border-box !important;
 }}
@@ -385,29 +444,333 @@ footer {{
   background: transparent !important;
 }}
 
-/* Layout largo: laterais maiores + centro */
+/*
+ * Layout em CSS Grid (3 colunas fixas).
+ * Evita o flex-wrap do Gradio que deslocava as laterais após a análise,
+ * e evita position:fixed que sobrepunha o centro.
+ */
 .cv-layout {{
-  align-items: flex-start !important;
+  display: grid !important;
+  grid-template-columns: 260px minmax(0, 1fr) 260px !important;
   gap: 1rem !important;
+  align-items: start !important;
   width: 100% !important;
+  flex-wrap: nowrap !important;
+}}
+.cv-layout > div {{
+  min-width: 0 !important;
+  max-width: 100% !important;
+}}
+/* Garante ordem mesmo se o Gradio inserir wrappers extras */
+.cv-layout > .cv-side:first-of-type,
+.cv-layout .cv-side:first-child {{
+  grid-column: 1 !important;
+}}
+.cv-layout > .cv-main,
+.cv-layout .cv-main {{
+  grid-column: 2 !important;
+}}
+.cv-layout > .cv-side:last-of-type {{
+  grid-column: 3 !important;
 }}
 .cv-side {{
-  flex: 0 0 280px !important;
-  min-width: 260px !important;
-  max-width: 320px !important;
+  position: sticky !important;
+  top: 0.75rem !important;
+  align-self: start !important;
+  width: 100% !important;
+  max-height: calc(100vh - 1.25rem) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }}
 .cv-main {{
-  flex: 1 1 auto !important;
   min-width: 0 !important;
+  width: 100% !important;
+  overflow-x: auto !important;
+  grid-column: 2 !important;
+}}
+.cv-resultado,
+.cv-editor {{
+  max-width: 100% !important;
+}}
+
+/* Bloco central: tipo + ZIP */
+.cv-section-title {{
+  text-align: center;
+  margin: 0.35rem auto 0.85rem auto;
+  max-width: 36rem;
+}}
+.cv-section-title h2 {{
+  margin: 0 0 0.3rem 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: {COLOR_AZUL_ESCURO};
+}}
+.cv-section-title p {{
+  margin: 0;
+  font-size: 0.9rem;
+  color: {COLOR_MUTED};
+  line-height: 1.4;
+}}
+.cv-input-row {{
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 1rem !important;
+  align-items: stretch !important;
+  max-width: 820px !important;
+  margin: 0 auto 1rem auto !important;
+  width: 100% !important;
+}}
+.cv-input-row > div {{
+  min-width: 0 !important;
+  height: 100% !important;
+}}
+.cv-input-card {{
+  background: linear-gradient(180deg, #e8f4f8 0%, {COLOR_OFFWHITE} 100%) !important;
+  border: 1px solid {COLOR_BORDER} !important;
+  border-radius: 14px !important;
+  padding: 0.85rem 0.9rem 1rem !important;
+  box-shadow: 0 3px 12px rgba(0, 92, 168, 0.07) !important;
+  height: 100% !important;
+}}
+.cv-input-card label,
+.cv-input-card .label-wrap span {{
+  color: {COLOR_AZUL_ESCURO} !important;
+  font-weight: 700 !important;
+  justify-content: center !important;
+  text-align: center !important;
+  width: 100% !important;
+}}
+.cv-tipo-radio {{
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0.55rem !important;
+}}
+.cv-tipo-radio .wrap {{
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.55rem !important;
+  align-items: stretch !important;
+}}
+.cv-tipo-radio label {{
+  border: 1px solid {COLOR_BORDER} !important;
+  border-radius: 10px !important;
+  padding: 0.65rem 0.85rem !important;
+  background: #fff !important;
+  margin: 0 !important;
+}}
+.cv-zip-upload,
+.cv-zip-upload .wrap,
+.cv-zip-upload .upload-container,
+.cv-zip-upload .center {{
+  min-height: 160px !important;
+  height: 100% !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,0.75) !important;
+  border: 1px dashed {COLOR_AZUL_CLARO} !important;
+}}
+.cv-btn-analisar {{
+  max-width: 820px !important;
+  margin: 0 auto 1rem auto !important;
+  display: block !important;
+  width: 100% !important;
+}}
+@media (max-width: 700px) {{
+  .cv-input-row {{
+    grid-template-columns: 1fr !important;
+  }}
+}}
+
+/* Progresso por etapas */
+.cv-progress {{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin: 0.5rem auto 1rem auto;
+  max-width: 720px;
+}}
+.cv-progress-step {{
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid {COLOR_BORDER};
+  background: #fff;
+  color: {COLOR_MUTED};
+}}
+.cv-progress-step.active {{
+  background: {COLOR_AZUL_MARCA};
+  border-color: {COLOR_AZUL_MARCA};
+  color: #fff;
+}}
+.cv-progress-step.done {{
+  background: #d7f0e5;
+  border-color: {COLOR_VERDE_MARCA};
+  color: {COLOR_VERDE_MARCA};
+}}
+.cv-progress-num {{
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.08);
+  font-size: 0.75rem;
+}}
+.cv-progress-step.active .cv-progress-num {{
+  background: rgba(255,255,255,0.25);
+}}
+.cv-progress-sep {{
+  width: 1.1rem;
+  height: 2px;
+  background: {COLOR_BORDER};
+}}
+
+/* Cards de resumo */
+.cv-resumo {{
+  margin: 0.5rem 0 1rem 0;
+}}
+.cv-resumo-head {{
+  text-align: center;
+  margin-bottom: 0.65rem;
+}}
+.cv-resumo-head strong {{
+  display: block;
+  color: {COLOR_AZUL_ESCURO};
+  font-size: 1.05rem;
+}}
+.cv-resumo-head span {{
+  color: {COLOR_MUTED};
+  font-size: 0.88rem;
+}}
+.cv-cards {{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  max-width: 720px;
+  margin: 0 auto;
+}}
+.cv-card-stat {{
+  text-align: center;
+  border-radius: 14px;
+  padding: 0.9rem 0.5rem;
+  border: 1px solid {COLOR_BORDER};
+  background: #fff;
+}}
+.cv-card-stat.ok {{ background: #eaf8f0; border-color: #b7e4c7; }}
+.cv-card-stat.parcial {{ background: #f7f9e8; border-color: #d8e59a; }}
+.cv-card-stat.nao {{ background: #fdeced; border-color: #f5c2c7; }}
+.cv-card-num {{
+  display: block;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: {COLOR_AZUL_ESCURO};
+}}
+.cv-card-stat.ok .cv-card-num {{ color: {COLOR_VERDE_MARCA}; }}
+.cv-card-stat.parcial .cv-card-num {{ color: #5f7d12; }}
+.cv-card-stat.nao .cv-card-num {{ color: #9b1c1c; }}
+.cv-card-label {{
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: {COLOR_MUTED};
+}}
+
+/* Inventário */
+.cv-inventory {{
+  margin: 0.75rem 0 1rem 0;
+  background: linear-gradient(180deg, #e8f4f8 0%, {COLOR_OFFWHITE} 100%);
+  border: 1px solid {COLOR_BORDER};
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+}}
+.cv-inventory h3 {{
+  margin: 0 0 0.55rem 0;
+  font-size: 0.95rem;
+  color: {COLOR_AZUL_ESCURO};
+}}
+.cv-inventory ul {{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}}
+.cv-inventory li {{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed {COLOR_BORDER};
+  font-size: 0.86rem;
+}}
+.cv-inventory li:last-child {{ border-bottom: none; }}
+.cv-inv-kind {{
+  display: inline-block;
+  min-width: 2.4rem;
+  text-align: center;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  background: {COLOR_AZUL_MARCA};
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}}
+.cv-inv-name {{
+  flex: 1 1 12rem;
+  color: {COLOR_AZUL_ESCURO};
+  word-break: break-all;
+}}
+.cv-inv-badge {{
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: #e2eef6;
+  color: {COLOR_AZUL_MARCA};
+}}
+.cv-inv-badge.ocr {{
+  background: #fff1d6;
+  color: #8a5a00;
+}}
+.cv-inv-meta {{
+  color: {COLOR_MUTED};
+  font-size: 0.78rem;
+}}
+
+.cv-exemplo-row {{
+  max-width: 820px !important;
+  margin: 0 auto 0.85rem auto !important;
+}}
+.cv-btn-nova {{
+  max-width: 220px !important;
+  margin-bottom: 0.75rem !important;
+}}
+.cv-badge {{
+  display: inline-block;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}}
+.cv-badge-ok {{ background: #d7f0e5; color: {COLOR_VERDE_MARCA}; }}
+.cv-badge-parcial {{ background: #eef7d4; color: #5f7d12; }}
+.cv-badge-nao {{ background: #fde2e2; color: #9b1c1c; }}
+
+@media (max-width: 700px) {{
+  .cv-cards {{ grid-template-columns: 1fr; }}
 }}
 .cv-side-panel {{
   background: linear-gradient(180deg, #e8f4f8 0%, {COLOR_OFFWHITE} 55%, #e9f5ef 100%);
   border: 1px solid {COLOR_BORDER};
   border-radius: 14px;
-  padding: 1.15rem 1.1rem 1.25rem;
+  padding: 1rem 0.95rem 1.1rem;
   box-shadow: 0 4px 16px rgba(0, 92, 168, 0.08);
-  position: sticky;
-  top: 0.75rem;
 }}
 .cv-side-panel h3 {{
   margin: 1rem 0 0.5rem 0;
@@ -489,15 +852,13 @@ footer {{
   color: {COLOR_AZUL_MARCA};
   background: rgba(255,255,255,0.55);
 }}
-@media (max-width: 1200px) {{
-  .cv-side {{
-    flex-basis: 220px !important;
-    min-width: 200px !important;
-    max-width: 240px !important;
+@media (max-width: 1100px) {{
+  .cv-layout {{
+    grid-template-columns: 1fr !important;
   }}
-}}
-@media (max-width: 980px) {{
-  .cv-side {{ display: none !important; }}
+  .cv-side {{
+    display: none !important;
+  }}
 }}
 
 .cv-hero {{
@@ -523,11 +884,13 @@ footer {{
 }}
 .cv-logo {{
   display: block;
-  height: 52px;
+  height: 120px;
   width: auto;
-  margin: 0 auto 0.9rem auto;
-  border-radius: 6px;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  max-width: min(560px, 95%);
+  object-fit: contain;
+  margin: 0 auto 1.1rem auto;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.22);
 }}
 .cv-hero-kicker {{
   font-size: 0.78rem;
@@ -634,8 +997,1042 @@ footer {{
 @media (max-width: 900px) {{
   .cv-steps {{ grid-template-columns: 1fr; }}
   .cv-hero h1 {{ font-size: 1.3rem; }}
-  .cv-logo {{ height: 42px; }}
+  .cv-logo {{ height: 88px; }}
 }}
+"""
+
+GRADIO_CSS += r"""
+/* ==========================================================
+   NOVO LAYOUT INSTITUCIONAL — CODEVASF 12ª SR
+   Sobrescrita final das regras anteriores
+   ========================================================== */
+
+/* ---------- Estrutura geral ---------- */
+
+html,
+body,
+.gradio-container,
+body.gradio-container,
+.main,
+.app,
+.contain {
+  background: #f4f6f8 !important;
+}
+
+body {
+  color: #1f2937 !important;
+}
+
+.gradio-container {
+  width: 100% !important;
+  max-width: 1320px !important;
+  min-height: 100vh !important;
+  margin: 0 auto !important;
+  padding: 1rem 1.5rem 2rem !important;
+  box-sizing: border-box !important;
+}
+
+/*
+ * O app ainda possui as duas colunas laterais no Python.
+ * Neste primeiro momento elas serão ocultadas por CSS.
+ */
+.cv-layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  gap: 0 !important;
+  align-items: start !important;
+}
+
+.cv-layout > .cv-side,
+.cv-layout .cv-side {
+  display: none !important;
+}
+
+.cv-layout > .cv-main,
+.cv-layout .cv-main,
+.cv-main {
+  display: block !important;
+  grid-column: 1 !important;
+  width: 100% !important;
+  max-width: 1180px !important;
+  min-width: 0 !important;
+  margin: 0 auto !important;
+  overflow: visible !important;
+}
+
+/* ---------- Cabeçalho institucional ---------- */
+
+.cv-hero {
+  display: none !important;
+}
+
+.cv-app-header {
+  overflow: hidden;
+  margin: 0 0 0.85rem;
+  background: #ffffff;
+  border: 1px solid #d7dee5;
+  border-top: 5px solid #005ca8;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(31, 41, 55, 0.06);
+}
+
+.cv-app-header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 1.25rem 0.9rem;
+}
+
+.cv-app-brand {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 1.15rem;
+}
+
+.cv-app-logo {
+  display: block;
+  flex: 0 0 auto;
+  width: auto;
+  height: 52px;
+  max-width: 230px;
+  margin: 0;
+  padding: 0;
+  object-fit: contain;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.cv-app-logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0.4rem 0.75rem;
+  background: #005ca8;
+  color: #ffffff;
+  font-size: 1.1rem;
+  letter-spacing: 0.03em;
+}
+
+.cv-app-identification {
+  min-width: 0;
+  padding-left: 1.15rem;
+  border-left: 1px solid #d7dee5;
+}
+
+.cv-app-institution {
+  display: block;
+  overflow: hidden;
+  margin-bottom: 0.15rem;
+  color: #5f6b7a;
+  font-size: 0.71rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-app-identification h1 {
+  margin: 0 !important;
+  color: #222b54 !important;
+  font-size: clamp(1.25rem, 2vw, 1.65rem) !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+}
+
+.cv-app-identification p {
+  margin: 0.25rem 0 0 !important;
+  color: #4b5d70 !important;
+  font-size: 0.88rem !important;
+}
+
+.cv-app-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #b7e0cd;
+  border-radius: 999px;
+  background: #edf8f3;
+  color: #006b43;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cv-app-status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #008658;
+  box-shadow: 0 0 0 3px rgba(0, 134, 88, 0.12);
+}
+
+.cv-app-description {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 1.25rem;
+  border-top: 1px solid #e4e9ee;
+  background: #f8fafb;
+  color: #536273;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.cv-app-description-alert {
+  color: #005ca8;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---------- Fluxo compacto ---------- */
+
+.cv-steps {
+  display: none !important;
+}
+
+.cv-workflow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 1rem;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #d7dee5;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(31, 41, 55, 0.04);
+}
+
+.cv-workflow-item {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.55rem;
+}
+
+.cv-workflow-number {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid #a9cbe1;
+  border-radius: 999px;
+  background: #edf5fa;
+  color: #005ca8;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.cv-workflow-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cv-workflow-content strong {
+  color: #27364a;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.cv-workflow-content small {
+  margin-top: 0.1rem;
+  color: #738092;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.cv-workflow-line {
+  flex: 1 1 3rem;
+  max-width: 6rem;
+  min-width: 1.5rem;
+  height: 1px;
+  margin: 0 0.8rem;
+  background: #cfd8e2;
+}
+
+/* ---------- Acordeão de status ---------- */
+
+.cv-main .gradio-accordion,
+.cv-main .accordion {
+  margin-bottom: 0.8rem !important;
+  overflow: hidden !important;
+  border: 1px solid #d7dee5 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* ---------- Área de envio ---------- */
+
+.cv-painel-envio {
+  padding: 1.25rem !important;
+  border: 1px solid #d7dee5 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(31, 41, 55, 0.05) !important;
+}
+
+.cv-section-title {
+  max-width: 100% !important;
+  margin: 0 0 1rem !important;
+  text-align: left !important;
+}
+
+.cv-section-title h2 {
+  margin: 0 0 0.25rem !important;
+  color: #222b54 !important;
+  font-size: 1.15rem !important;
+  font-weight: 700 !important;
+}
+
+.cv-section-title p {
+  margin: 0 !important;
+  color: #667386 !important;
+  font-size: 0.88rem !important;
+}
+
+.cv-input-row {
+  display: grid !important;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(380px, 1.2fr) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 0 1rem !important;
+  gap: 1rem !important;
+  align-items: stretch !important;
+}
+
+.cv-input-card {
+  height: 100% !important;
+  padding: 1rem !important;
+  box-sizing: border-box !important;
+  border: 1px solid #dbe3ea !important;
+  border-radius: 8px !important;
+  background: #f8fafb !important;
+  box-shadow: none !important;
+}
+
+.cv-input-card label,
+.cv-input-card .label-wrap span {
+  justify-content: flex-start !important;
+  color: #27364a !important;
+  text-align: left !important;
+  font-size: 0.86rem !important;
+  font-weight: 700 !important;
+}
+
+.cv-tipo-radio,
+.cv-tipo-radio .wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.cv-tipo-radio label {
+  margin: 0 !important;
+  padding: 0.65rem 0.75rem !important;
+  border: 1px solid #d7dee5 !important;
+  border-radius: 7px !important;
+  background: #ffffff !important;
+  color: #344256 !important;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.cv-tipo-radio label:hover {
+  border-color: #74aeda !important;
+  background: #f3f8fc !important;
+}
+
+.cv-zip-upload,
+.cv-zip-upload .wrap,
+.cv-zip-upload .upload-container,
+.cv-zip-upload .center {
+  min-height: 150px !important;
+  height: 100% !important;
+  border: 1px dashed #8abbd8 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+}
+
+.cv-btn-analisar {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  border-radius: 7px !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+}
+
+/* ---------- Progresso ---------- */
+
+.cv-progress-wrap {
+  margin: 0 !important;
+}
+
+.cv-progress {
+  width: 100%;
+  max-width: 760px;
+  margin: 0.8rem auto;
+  gap: 0.4rem;
+}
+
+.cv-progress-step {
+  min-height: 30px;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #d4dce5;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #657184;
+  font-size: 0.78rem;
+}
+
+.cv-progress-step.active {
+  border-color: #005ca8;
+  background: #005ca8;
+  color: #ffffff;
+}
+
+.cv-progress-step.done {
+  border-color: #9dd1b9;
+  background: #e9f7f0;
+  color: #007d4e;
+}
+
+.cv-progress-sep {
+  background: #ccd6df;
+}
+
+/* ---------- Área de resultado ---------- */
+
+.cv-painel-resultado {
+  padding: 1.25rem !important;
+  border: 1px solid #d7dee5 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(31, 41, 55, 0.05) !important;
+}
+
+.cv-btn-nova {
+  width: auto !important;
+  max-width: 190px !important;
+  margin: 0 0 0.85rem !important;
+  border-color: #b9c5d1 !important;
+  color: #344256 !important;
+}
+
+/* ---------- Resumo ---------- */
+
+.cv-resumo {
+  margin: 0 0 1.25rem;
+}
+
+.cv-resumo-head {
+  margin-bottom: 0.75rem;
+  text-align: left;
+}
+
+.cv-resumo-head strong {
+  color: #222b54;
+  font-size: 1.12rem;
+}
+
+.cv-resumo-head span {
+  display: block;
+  margin-top: 0.15rem;
+  color: #687589;
+  font-size: 0.84rem;
+}
+
+.cv-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  gap: 0.75rem;
+}
+
+.cv-card-stat {
+  min-height: 92px;
+  padding: 0.9rem;
+  text-align: left;
+  border: 1px solid #d7dee5;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.cv-card-stat.ok {
+  border-color: #b9dfcc;
+  border-left-color: #007d4e;
+  background: #f4fbf7;
+}
+
+.cv-card-stat.parcial {
+  border-color: #dbe4a6;
+  border-left-color: #809e20;
+  background: #fbfcef;
+}
+
+.cv-card-stat.nao {
+  border-color: #efc4c4;
+  border-left-color: #b42318;
+  background: #fff7f6;
+}
+
+.cv-card-num {
+  margin-bottom: 0.25rem;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.cv-card-label {
+  color: #536173;
+  font-size: 0.8rem;
+}
+
+/* ---------- Detalhamento Markdown ---------- */
+
+.cv-resultado {
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+.cv-resultado h2 {
+  margin: 1.4rem 0 0.35rem !important;
+  color: #222b54 !important;
+  font-size: 1.25rem !important;
+}
+
+.cv-resultado > div > p,
+.cv-resultado p {
+  color: #4b596c;
+  line-height: 1.55;
+}
+
+.cv-resultado h3 {
+  margin: 1rem 0 0 !important;
+  padding: 0.85rem 1rem !important;
+  border: 1px solid #dbe3ea !important;
+  border-bottom: 0 !important;
+  border-radius: 8px 8px 0 0 !important;
+  background: #f7f9fb !important;
+  color: #27364a !important;
+  font-size: 0.95rem !important;
+  line-height: 1.45 !important;
+}
+
+.cv-resultado h3 + p {
+  margin: 0 !important;
+  padding: 0.8rem 1rem 0.35rem !important;
+  border-right: 1px solid #dbe3ea !important;
+  border-left: 1px solid #dbe3ea !important;
+  background: #ffffff !important;
+}
+
+.cv-resultado h3 + p + p {
+  margin: 0 0 0.75rem !important;
+  padding: 0.15rem 1rem 0.85rem !important;
+  border-right: 1px solid #dbe3ea !important;
+  border-bottom: 1px solid #dbe3ea !important;
+  border-left: 1px solid #dbe3ea !important;
+  border-radius: 0 0 8px 8px !important;
+  background: #ffffff !important;
+}
+
+.cv-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.48rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.cv-badge-ok {
+  background: #dff4e9;
+  color: #006b43;
+}
+
+.cv-badge-parcial {
+  background: #eff5ce;
+  color: #627b12;
+}
+
+.cv-badge-nao {
+  background: #fee4e2;
+  color: #b42318;
+}
+
+/* ---------- Inventário ---------- */
+
+.cv-inventory {
+  margin: 1.25rem 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #d7dee5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.cv-inventory h3 {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid #d7dee5;
+  background: #f7f9fb;
+  color: #27364a;
+  font-size: 0.95rem;
+}
+
+.cv-inventory ul {
+  margin: 0;
+  padding: 0;
+}
+
+.cv-inventory li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto auto;
+  min-height: 42px;
+  padding: 0.45rem 1rem;
+  gap: 0.65rem;
+  border-bottom: 1px solid #e5e9ee;
+  font-size: 0.82rem;
+}
+
+.cv-inventory li:last-child {
+  border-bottom: 0;
+}
+
+.cv-inv-kind {
+  min-width: auto;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  background: #005ca8;
+  font-size: 0.66rem;
+}
+
+.cv-inv-name {
+  overflow: hidden;
+  color: #344256;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.cv-inv-badge {
+  background: #edf3f8;
+  color: #005ca8;
+}
+
+.cv-inv-badge.ocr {
+  background: #fff2d7;
+  color: #8b5a00;
+}
+
+.cv-inv-meta {
+  color: #798596;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+/* ---------- Revisão humana ---------- */
+
+.cv-rev-item,
+.cv-rev-status {
+  border-radius: 8px !important;
+}
+
+.cv-painel-resultado .form,
+.cv-painel-resultado .block {
+  box-shadow: none;
+}
+
+.cv-painel-resultado textarea,
+.cv-painel-resultado input {
+  border-color: #cfd8e2 !important;
+}
+
+/* ---------- Downloads ---------- */
+
+.cv-downloads {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  margin-top: 1rem !important;
+  gap: 0.65rem !important;
+}
+
+.cv-downloads > * {
+  min-width: 0 !important;
+}
+
+.cv-download,
+.cv-download > .block,
+.cv-download .wrap,
+.cv-download .empty,
+.cv-download .file-preview,
+.cv-download [data-testid="file"],
+.cv-download .upload-container {
+  min-height: 76px !important;
+  border: 1px solid #d7dee5 !important;
+  border-radius: 8px !important;
+  background: #f8fafb !important;
+  box-shadow: none !important;
+}
+
+.cv-downloads > *:last-child .cv-download,
+.cv-downloads > *:last-child > div,
+.cv-downloads > *:last-child .block {
+  border-color: #93cdb3 !important;
+  background: #f1faf6 !important;
+}
+
+/* ---------- Rodapé ---------- */
+
+.cv-footer-note {
+  margin: 1rem 0 0;
+  padding: 0.85rem 0.25rem 0;
+  border-top: 1px solid #d7dee5;
+  color: #748092;
+  text-align: center;
+  font-size: 0.74rem;
+}
+
+/* ---------- Acessibilidade ---------- */
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid rgba(0, 92, 168, 0.25) !important;
+  outline-offset: 2px !important;
+}
+
+button,
+[role="button"] {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease !important;
+}
+
+button:hover,
+[role="button"]:hover {
+  box-shadow: 0 2px 7px rgba(31, 41, 55, 0.1) !important;
+}
+
+/* ---------- Responsividade ---------- */
+
+@media (max-width: 900px) {
+  .gradio-container {
+    padding: 0.75rem !important;
+  }
+
+  .cv-app-header-main {
+    align-items: flex-start;
+  }
+
+  .cv-app-logo {
+    height: 44px;
+    max-width: 180px;
+  }
+
+  .cv-app-status {
+    display: none;
+  }
+
+  .cv-app-description {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .cv-app-description-alert {
+    white-space: normal;
+  }
+
+  .cv-input-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cv-downloads {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .cv-app-header-main {
+    padding: 0.9rem;
+  }
+
+  .cv-app-brand {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .cv-app-identification {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .cv-app-institution {
+    white-space: normal;
+  }
+
+  .cv-app-description {
+    padding: 0.65rem 0.9rem;
+  }
+
+  .cv-workflow {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 0.75rem;
+    gap: 0.45rem;
+  }
+
+  .cv-workflow-line {
+    width: 1px;
+    height: 12px;
+    min-width: 1px;
+    margin: 0 0 0 0.85rem;
+  }
+
+  .cv-painel-envio,
+  .cv-painel-resultado {
+    padding: 0.85rem !important;
+  }
+
+  .cv-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .cv-inventory li {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .cv-inv-badge,
+  .cv-inv-meta {
+    grid-column: 2;
+  }
+
+  .cv-downloads {
+    grid-template-columns: 1fr !important;
+  }
+}
+"""
+
+GRADIO_CSS += r"""
+/* ==========================================================
+   COMPONENTES ADICIONAIS DO NOVO APP.PY
+   ========================================================== */
+
+.cv-help-content {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+}
+
+.cv-help-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  min-height: 105px;
+  padding: 0.85rem;
+  border: 1px solid #dbe3ea;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.cv-help-number {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  background: #005ca8;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.cv-help-card strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #27364a;
+  font-size: 0.86rem;
+}
+
+.cv-help-card p {
+  margin: 0;
+  color: #657184;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.cv-help-note {
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-left: 3px solid #005ca8;
+  background: #f2f7fb;
+  color: #536173;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.cv-upload-guidance {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #d8e6ef;
+  border-radius: 7px;
+  background: #f4f9fc;
+  color: #566477;
+  font-size: 0.79rem;
+  line-height: 1.45;
+}
+
+.cv-result-toolbar {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  align-items: center !important;
+  margin-bottom: 1rem !important;
+  gap: 1rem !important;
+}
+
+.cv-result-toolbar-copy {
+  text-align: right;
+}
+
+.cv-result-toolbar-copy strong {
+  display: block;
+  color: #222b54;
+  font-size: 1rem;
+}
+
+.cv-result-toolbar-copy span {
+  display: block;
+  margin-top: 0.15rem;
+  color: #6a7687;
+  font-size: 0.78rem;
+}
+
+.cv-review-intro {
+  margin-bottom: 0.85rem;
+}
+
+.cv-review-intro strong {
+  color: #27364a;
+  font-size: 0.92rem;
+}
+
+.cv-review-intro p {
+  margin: 0.25rem 0 0;
+  color: #687589;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.cv-review-fields {
+  align-items: stretch !important;
+  gap: 0.75rem !important;
+}
+
+.cv-review-actions {
+  margin-top: 0.6rem !important;
+  gap: 0.75rem !important;
+}
+
+.cv-btn-save-review,
+.cv-btn-generate-review {
+  min-height: 42px !important;
+  border-radius: 7px !important;
+  font-weight: 700 !important;
+}
+
+.cv-export-heading {
+  margin: 1.25rem 0 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid #d7dee5;
+}
+
+.cv-export-heading h2 {
+  margin: 0 0 0.2rem;
+  color: #222b54;
+  font-size: 1.08rem;
+}
+
+.cv-export-heading p {
+  margin: 0;
+  color: #687589;
+  font-size: 0.8rem;
+}
+
+.cv-download-primary,
+.cv-download-primary > .block,
+.cv-download-primary .wrap,
+.cv-download-primary .file-preview,
+.cv-download-primary .upload-container {
+  border-color: #72bb99 !important;
+  background: #f0faf5 !important;
+}
+
+.cv-download-primary label,
+.cv-download-primary .label-wrap span {
+  color: #006b43 !important;
+  font-weight: 700 !important;
+}
+
+.cv-download-technical {
+  opacity: 0.82;
+}
+
+@media (max-width: 850px) {
+  .cv-help-content {
+    grid-template-columns: 1fr;
+  }
+
+  .cv-help-card {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .cv-result-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cv-result-toolbar-copy {
+    text-align: left;
+  }
+
+  .cv-review-fields,
+  .cv-review-actions {
+    flex-direction: column !important;
+  }
+}
 """
 
 

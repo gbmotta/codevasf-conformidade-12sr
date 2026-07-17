@@ -5,7 +5,6 @@ __pycache__/
 data/uploads/*
 !data/uploads/.gitkeep
 .streamlit/secrets.toml
-*.zip
 .DS_Store
 *.xlsx
 !checklists/**
@@ -20,3 +19,8 @@ huggin_token.txt
 # Manual de identidade visual (binário grande — manter local)
 id_visual_codevasf.pdf
 id_visual*.pdf
+
+# Exemplos de ZIP para a UI
+*.zip
+!examples/
+!examples/*.zip

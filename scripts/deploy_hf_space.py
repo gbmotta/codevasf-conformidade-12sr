@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STAGE = ROOT / ".deploy_hf"
 
 # Pastas/arquivos enviados ao Space Gradio
-COPY_DIRS = ("conformidade", "checklists", "app")
+COPY_DIRS = ("conformidade", "checklists", "app", "examples")
 COPY_FILES = (
     "app.py",
     "packages.txt",
@@ -113,7 +113,7 @@ def deploy(username: str, space_name: str, token: str) -> str:
         repo_id=repo_id,
         repo_type="space",
         token=token,
-        commit_message="UI Codevasf: identidade visual, laterais e layout largo",
+        commit_message="UI institucional: cabeçalho compacto, coluna única e exports",
     )
 
     try:
