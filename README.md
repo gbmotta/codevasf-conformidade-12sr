@@ -38,7 +38,10 @@ O Space usa **Gradio + ZeroGPU** (conta free). Streamlit Docker (intranet) conti
 1. Escolher **Prefeitura** ou **Associação / Cooperativa**
 2. Enviar o **ZIP** do requerimento (ou arquivos avulsos)
 3. Clicar em **Analisar conformidade**
-4. Revisar abas e baixar relatório (`.md` / `.xlsx`)
+4. (Opcional) ajustar status/motivo na **revisão humana**
+5. Baixar o relatório (`.md` / `.xlsx`) — automático ou revisado
+
+A análise usa **regras determinísticas** (nome/conteúdo) e chama a **IA** só nos itens dúbios.
 
 ## Rede interna (Srv0312sr)
 
