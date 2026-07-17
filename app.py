@@ -20,7 +20,12 @@ from conformidade.models import (
     StatusConformidade,
     aplicar_revisao_humana,
 )
-from conformidade.report import relatorio_para_markdown, relatorio_para_xlsx
+from conformidade.report import (
+    relatorio_para_docx,
+    relatorio_para_markdown,
+    relatorio_para_pdf,
+    relatorio_para_xlsx,
+)
 
 STATUS_BADGE = {
     StatusConformidade.ATENDIDO: (
@@ -104,15 +109,21 @@ def _relatorio_to_editor_rows(relatorio: RelatorioConformidade) -> list[list]:
     return rows
 
 
-def _export_files(relatorio: RelatorioConformidade, work: Path | None = None) -> tuple[str, str]:
+def _export_files(
+    relatorio: RelatorioConformidade, work: Path | None = None
+) -> tuple[str, str, str, str]:
     out_dir = (work or Path(tempfile.mkdtemp(prefix="conf_out_"))) / "saida"
     out_dir.mkdir(parents=True, exist_ok=True)
     suffix = "_revisado" if relatorio.revisado else ""
     md_path = out_dir / f"relatorio_conformidade{suffix}.md"
     xlsx_path = out_dir / f"relatorio_conformidade{suffix}.xlsx"
+    docx_path = out_dir / f"relatorio_conformidade{suffix}.docx"
+    pdf_path = out_dir / f"relatorio_conformidade{suffix}.pdf"
     md_path.write_text(relatorio_para_markdown(relatorio), encoding="utf-8")
     xlsx_path.write_bytes(relatorio_para_xlsx(relatorio))
-    return str(md_path), str(xlsx_path)
+    docx_path.write_bytes(relatorio_para_docx(relatorio))
+    pdf_path.write_bytes(relatorio_para_pdf(relatorio))
+    return str(md_path), str(xlsx_path), str(docx_path), str(pdf_path)
 
 
 def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
@@ -157,7 +168,7 @@ def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
         f"- {d.relative_path} ({d.extraction_method}, {len(d.content)} chars)"
         for d in documents
     )
-    md_path, xlsx_path = _export_files(relatorio, work)
+    md_path, xlsx_path, docx_path, pdf_path = _export_files(relatorio, work)
     progress(1.0, desc="Concluído — ajuste os status abaixo se necessário")
     return (
         _format_relatorio_md(relatorio),
@@ -166,6 +177,8 @@ def analisar(tipo_label: str, zip_file, progress=gr.Progress(track_tqdm=False)):
         relatorio.to_dict(),
         md_path,
         xlsx_path,
+        docx_path,
+        pdf_path,
     )
 
 
@@ -188,13 +201,15 @@ def aplicar_revisao(editor_rows, state_dict):
             }
         )
     revisado = aplicar_revisao_humana(relatorio, overrides)
-    md_path, xlsx_path = _export_files(revisado)
+    md_path, xlsx_path, docx_path, pdf_path = _export_files(revisado)
     return (
         _format_relatorio_md(revisado),
         _relatorio_to_editor_rows(revisado),
         revisado.to_dict(),
         md_path,
         xlsx_path,
+        docx_path,
+        pdf_path,
     )
 
 
@@ -239,16 +254,27 @@ def build_ui() -> gr.Blocks:
         with gr.Row():
             md_out = gr.File(label="Relatório .md")
             xlsx_out = gr.File(label="Relatório .xlsx")
+            docx_out = gr.File(label="Relatório .docx")
+            pdf_out = gr.File(label="Relatório .pdf")
 
         btn.click(
             fn=analisar,
             inputs=[tipo, zip_in],
-            outputs=[resultado, inventario, editor, state, md_out, xlsx_out],
+            outputs=[
+                resultado,
+                inventario,
+                editor,
+                state,
+                md_out,
+                xlsx_out,
+                docx_out,
+                pdf_out,
+            ],
         )
         btn_revisar.click(
             fn=aplicar_revisao,
             inputs=[editor, state],
-            outputs=[resultado, editor, state, md_out, xlsx_out],
+            outputs=[resultado, editor, state, md_out, xlsx_out, docx_out, pdf_out],
         )
         gr.Markdown(
             "CODEVASF — 12ª Superintendência Regional (Natal/RN) · "

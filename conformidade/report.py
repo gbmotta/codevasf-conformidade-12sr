@@ -1,16 +1,17 @@
-"""Geração de relatório textual e Excel para download."""
+"""Geração de relatório em Markdown, Excel, DOCX e PDF."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from conformidade.analyzer import RelatorioConformidade, StatusConformidade
 from conformidade.checklist import label_tipo
+from conformidade.models import RelatorioConformidade, StatusConformidade
 
 
 STATUS_LABEL = {
@@ -25,25 +26,49 @@ STATUS_FILL = {
     StatusConformidade.NAO_ATENDIDO: PatternFill("solid", fgColor="FFC7CE"),
 }
 
+STATUS_RGB = {
+    StatusConformidade.ATENDIDO: "006100",
+    StatusConformidade.PARCIAL: "9C5700",
+    StatusConformidade.NAO_ATENDIDO: "9C0006",
+}
 
-def relatorio_para_markdown(relatorio: RelatorioConformidade) -> str:
+
+def _meta_rows(relatorio: RelatorioConformidade) -> list[tuple[str, str]]:
     counts = relatorio.contagem
     agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+    return [
+        ("Data", agora),
+        ("Tipo", label_tipo(relatorio.tipo)),
+        ("Entidade / município", relatorio.entidade_detectada),
+        ("Resumo", relatorio.resumo),
+        ("Atendidos", str(counts["atendido"])),
+        ("Parciais", str(counts["parcial"])),
+        ("Não atendidos", str(counts["nao_atendido"])),
+        ("Versão", "Revisada (humano)" if relatorio.revisado else "Automática"),
+    ]
+
+
+def _find_unicode_font() -> str | None:
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        str(Path.home() / "miniconda3/fonts/DejaVuSans.ttf"),
+    ]
+    for path in candidates:
+        if Path(path).is_file():
+            return path
+    return None
+
+
+def relatorio_para_markdown(relatorio: RelatorioConformidade) -> str:
     lines = [
         "# CODEVASF 12ª SR — Relatório de Conformidade Documental",
         "",
-        f"- **Data:** {agora}",
-        f"- **Tipo:** {label_tipo(relatorio.tipo)}",
-        f"- **Entidade / município:** {relatorio.entidade_detectada}",
-        f"- **Resumo:** {relatorio.resumo}",
-        f"- **Atendidos:** {counts['atendido']}",
-        f"- **Parciais:** {counts['parcial']}",
-        f"- **Não atendidos:** {counts['nao_atendido']}",
-        f"- **Versão:** {'revisada (ajuste humano)' if relatorio.revisado else 'automática'}",
-        "",
-        "## Itens do checklist",
-        "",
     ]
+    for label, value in _meta_rows(relatorio):
+        lines.append(f"- **{label}:** {value}")
+    lines.extend(["", "## Itens do checklist", ""])
     for item in relatorio.itens:
         lines.append(
             f"### {item.numero}. [{STATUS_LABEL[item.status]}] "
@@ -178,3 +203,150 @@ def relatorio_para_xlsx(relatorio: RelatorioConformidade) -> bytes:
     buffer = BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
+
+
+def relatorio_para_docx(relatorio: RelatorioConformidade) -> bytes:
+    """Gera documento Word (.docx) com resumo e itens coloridos por status."""
+    from docx import Document
+    from docx.shared import Pt, RGBColor
+
+    doc = Document()
+    title = doc.add_heading("CODEVASF 12ª SR — Relatório de Conformidade Documental", level=1)
+    for run in title.runs:
+        run.font.color.rgb = RGBColor(0x00, 0x66, 0x33)
+
+    for label, value in _meta_rows(relatorio):
+        p = doc.add_paragraph()
+        run_l = p.add_run(f"{label}: ")
+        run_l.bold = True
+        p.add_run(value)
+
+    doc.add_heading("Itens do checklist", level=2)
+    for item in relatorio.itens:
+        heading = doc.add_paragraph()
+        run_n = heading.add_run(f"{item.numero}. [{STATUS_LABEL[item.status]}] ")
+        run_n.bold = True
+        hex_color = STATUS_RGB[item.status]
+        run_n.font.color.rgb = RGBColor(
+            int(hex_color[0:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:6], 16),
+        )
+        heading.add_run(f"({item.fonte}) {item.descricao}")
+
+        p_motivo = doc.add_paragraph()
+        r = p_motivo.add_run("Motivo: ")
+        r.bold = True
+        p_motivo.add_run(item.motivo)
+        if item.documentos_relacionados:
+            p_arq = doc.add_paragraph()
+            r2 = p_arq.add_run("Arquivos: ")
+            r2.bold = True
+            p_arq.add_run(", ".join(item.documentos_relacionados))
+
+    doc.add_heading("Documentos analisados", level=2)
+    for name in relatorio.documentos_analisados:
+        doc.add_paragraph(name, style="List Bullet")
+
+    footnote = doc.add_paragraph()
+    run_f = footnote.add_run(
+        "Relatório assistivo gerado na 12ª SR. A decisão final permanece com a equipe técnica."
+    )
+    run_f.italic = True
+    run_f.font.size = Pt(9)
+
+    buffer = BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()
+
+
+def relatorio_para_pdf(relatorio: RelatorioConformidade) -> bytes:
+    """Gera PDF com fpdf2 (UTF-8 via fonte DejaVu quando disponível)."""
+    from fpdf import FPDF
+
+    class RelatorioPDF(FPDF):
+        def footer(self) -> None:
+            self.set_y(-15)
+            self.set_font(self._body_font, size=8)
+            self.set_text_color(100, 100, 100)
+            self.cell(
+                0,
+                8,
+                "CODEVASF 12ª SR — relatório assistivo — decisão final da equipe técnica",
+                align="C",
+            )
+
+    pdf = RelatorioPDF()
+    pdf.set_auto_page_break(auto=True, margin=18)
+    font_path = _find_unicode_font()
+    if font_path:
+        pdf.add_font("Body", "", font_path)
+        # Tenta variante bold; se não houver, reutiliza a regular
+        bold_path = font_path.replace("DejaVuSans.ttf", "DejaVuSans-Bold.ttf")
+        if Path(bold_path).is_file():
+            pdf.add_font("Body", "B", bold_path)
+        else:
+            pdf.add_font("Body", "B", font_path)
+        pdf._body_font = "Body"  # type: ignore[attr-defined]
+    else:
+        pdf._body_font = "Helvetica"  # type: ignore[attr-defined]
+
+    body = pdf._body_font  # type: ignore[attr-defined]
+    pdf.add_page()
+    pdf.set_font(body, "B", 14)
+    pdf.set_text_color(0, 102, 51)
+    pdf.multi_cell(0, 8, "CODEVASF 12ª SR — Relatório de Conformidade Documental")
+    pdf.ln(2)
+
+    pdf.set_text_color(0, 0, 0)
+    for label, value in _meta_rows(relatorio):
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font(body, "B", 10)
+        pdf.multi_cell(0, 5, f"{label}: {value}")
+        pdf.ln(0.5)
+
+    pdf.ln(2)
+    pdf.set_x(pdf.l_margin)
+    pdf.set_font(body, "B", 12)
+    pdf.set_text_color(0, 102, 51)
+    pdf.multi_cell(0, 8, "Itens do checklist")
+    pdf.ln(1)
+
+    for item in relatorio.itens:
+        hex_color = STATUS_RGB[item.status]
+        r, g, b = (
+            int(hex_color[0:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:6], 16),
+        )
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font(body, "B", 10)
+        pdf.set_text_color(r, g, b)
+        pdf.multi_cell(
+            0,
+            5,
+            f"{item.numero}. [{STATUS_LABEL[item.status]}] ({item.fonte})",
+        )
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font(body, "", 10)
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(0, 5, item.descricao)
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font(body, "", 9)
+        pdf.multi_cell(0, 5, f"Motivo: {item.motivo}")
+        if item.documentos_relacionados:
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(0, 5, "Arquivos: " + ", ".join(item.documentos_relacionados))
+        pdf.ln(2)
+
+    pdf.set_x(pdf.l_margin)
+    pdf.set_font(body, "B", 12)
+    pdf.set_text_color(0, 102, 51)
+    pdf.multi_cell(0, 8, "Documentos analisados")
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font(body, "", 10)
+    for name in relatorio.documentos_analisados:
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(0, 5, f"- {name}")
+
+    return bytes(pdf.output())

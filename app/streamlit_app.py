@@ -36,7 +36,12 @@ from conformidade.models import (
     StatusConformidade,
     aplicar_revisao_humana,
 )
-from conformidade.report import relatorio_para_markdown, relatorio_para_xlsx
+from conformidade.report import (
+    relatorio_para_docx,
+    relatorio_para_markdown,
+    relatorio_para_pdf,
+    relatorio_para_xlsx,
+)
 
 
 STATUS_UI = {
@@ -224,12 +229,14 @@ def render_relatorio(relatorio: RelatorioConformidade) -> None:
 
     md = relatorio_para_markdown(relatorio)
     xlsx = relatorio_para_xlsx(relatorio)
+    docx = relatorio_para_docx(relatorio)
+    pdf = relatorio_para_pdf(relatorio)
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
     suffix = "_revisado" if relatorio.revisado else ""
-    dl_md, dl_xlsx = st.columns(2)
+    dl_md, dl_xlsx, dl_docx, dl_pdf = st.columns(4)
     with dl_md:
         st.download_button(
-            "Baixar relatório (.md)",
+            "Baixar .md",
             data=md.encode("utf-8"),
             file_name=f"relatorio_conformidade{suffix}_{stamp}.md",
             mime="text/markdown",
@@ -237,10 +244,26 @@ def render_relatorio(relatorio: RelatorioConformidade) -> None:
         )
     with dl_xlsx:
         st.download_button(
-            "Baixar relatório (.xlsx)",
+            "Baixar .xlsx",
             data=xlsx,
             file_name=f"relatorio_conformidade{suffix}_{stamp}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    with dl_docx:
+        st.download_button(
+            "Baixar .docx",
+            data=docx,
+            file_name=f"relatorio_conformidade{suffix}_{stamp}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+        )
+    with dl_pdf:
+        st.download_button(
+            "Baixar .pdf",
+            data=pdf,
+            file_name=f"relatorio_conformidade{suffix}_{stamp}.pdf",
+            mime="application/pdf",
             use_container_width=True,
         )
 
