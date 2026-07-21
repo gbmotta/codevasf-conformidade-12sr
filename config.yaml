@@ -9,3 +9,14 @@ analysis:
   max_chars_per_document: 3500
   # Limite total de contexto dos documentos na análise
   max_total_document_chars: 28000
+
+# OCR (também via env: OCR_DPI, OCR_MAX_PAGES, OCR_LANG, OCR_ENGINE, OCR_PREPROCESS)
+ocr:
+  dpi: 350
+  max_pages: 40
+  lang: "por+eng"
+  # tesseract (padrão Space) | easyocr | auto (+ allow_easyocr)
+  engine: tesseract
+  preprocess: true
+  osd: false
+  allow_easyocr: false

@@ -26,6 +26,7 @@ RUN apt-get update \
         build-essential \
         tesseract-ocr \
         tesseract-ocr-por \
+        tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

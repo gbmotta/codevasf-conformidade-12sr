@@ -14,6 +14,7 @@ openpyxl>=3.1.0
 pymupdf>=1.24.0
 pytesseract>=0.3.10
 pillow>=10.0.0
+# EasyOCR não entra no Space (cold start / RAM). Use OCR_ENGINE=tesseract (padrão auto sem easyocr).
 huggingface_hub>=0.26.0
 gradio>=5.0.0
 spaces>=0.30.0
