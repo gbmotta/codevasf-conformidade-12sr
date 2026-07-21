@@ -50,7 +50,12 @@ Regras obrigatórias:
 7. Explique o motivo objetivamente e cite arquivos em documentos_relacionados.
 8. Não atribua um arquivo a um item se o nome/conteúdo for claramente de outro tipo
    (ex.: CNH não serve como Ata de Posse; Diploma não serve como Ofício).
-9. Responda SOMENTE JSON válido, sem markdown e sem texto fora do JSON.
+9. Doação/Cessão Onerosa (ano eleitoral): NÃO confundir com a Declaração de Não
+   Ocorrência de Impedimentos (FOR-198 / Lei 13.019/2014 art. 39). FOR-198 NÃO atende
+   o item de Doação Onerosa. Só marque "atendido" se houver declaração explícita de
+   aceitação à modalidade de Doação Onerosa / Cessão Onerosa com contrapartida
+   percentual (1% associações ou 1,5% prefeituras). Se só houver FOR-198, use "nao_atendido".
+10. Responda SOMENTE JSON válido, sem markdown e sem texto fora do JSON.
 """
 
 

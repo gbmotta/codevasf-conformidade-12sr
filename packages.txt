@@ -1,5 +1,3 @@
-# Pacotes apt do Hugging Face Spaces (OCR + fontes para PDF)
-# Usado pelo runtime Gradio do Space (não pelo Docker intranet).
 tesseract-ocr
 tesseract-ocr-por
 fonts-dejavu-core
