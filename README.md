@@ -431,21 +431,24 @@ Objetivo: classificar documentos e extrair campos **antes** (ou no lugar) da cha
 
 Integração: `rules.py` usa o classificador como boost/penalidade e marca certidões **vencidas** como parcial.
 
-### Exportar rótulos e treinar
+### Rotulagem manual (tipo 3)
 
 ```bash
-# 1) CSV a partir de seed + (opcional) relatórios JSON / pasta de PDFs
-python scripts/export_doc_labels.py --seed-only --out data/ml/labels.csv
-python scripts/export_doc_labels.py --reports-dir ./meus_relatorios_json --docs-root ./pacotes --out data/ml/labels.csv
+# 1) Gera CSV com file_name + content (label vazio para você preencher)
+python scripts/prepare_manual_labels.py --docs-dir "C:\pasta\do\pacote"
+# ou a partir do ZIP:
+python scripts/prepare_manual_labels.py --zip "C:\envio.zip"
+# opcional: já sugere label (revise no Excel)
+python scripts/prepare_manual_labels.py --zip "C:\envio.zip" --suggest
 
-# 2) Treinar e gravar modelo em conformidade/ml/artifacts/
-python scripts/train_doc_classifier.py --from-seed
-python scripts/train_doc_classifier.py --csv data/ml/labels.csv
+# 2) Abra data/ml/para_rotular.csv no Excel e preencha a coluna label
+#    (lista em data/ml/ROTULOS_VALIDOS.txt / LEIA-ME_ROTULAGEM.txt)
+
+# 3) Treine
+python scripts/train_doc_classifier.py --csv data/ml/para_rotular.csv
 ```
 
-Relatórios JSON = saída de `RelatorioConformidade.to_dict()` (export da UI). Itens `atendido`/`parcial` geram linhas `(arquivo → rótulo do item)`.
-
-Sem modelo treinado, o sistema usa só a heurística (já cobre FOR-198 ≠ onerosa).
+Modelo de formato: `data/ml/modelo_rotulagem_manual.csv`.
 
 ---
 

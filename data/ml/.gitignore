@@ -1,3 +1,18 @@
-# Datasets de rótulos ML (CSV). Modelos ficam em conformidade/ml/artifacts/
+# Rotulagem manual — CODEVASF conformidade
+#
+# 1) Gere o CSV a partir de um pacote:
+#      python scripts/prepare_manual_labels.py --docs-dir "C:\pasta\do\pacote"
+#    ou:
+#      python scripts/prepare_manual_labels.py --zip "C:\envio.zip"
+#
+# 2) Abra data/ml/para_rotular.csv no Excel
+# 3) Preencha a coluna "label" (veja ROTULOS_VALIDOS.txt ao lado)
+# 4) Salve como CSV
+# 5) Treine:
+#      python scripts/train_doc_classifier.py --csv data/ml/para_rotular.csv
+#
+# Exemplo de formato: modelo_rotulagem_manual.csv
 *
 !.gitignore
+!modelo_rotulagem_manual.csv
+!LEIA-ME_ROTULAGEM.txt

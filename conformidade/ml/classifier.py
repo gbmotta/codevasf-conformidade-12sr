@@ -215,13 +215,18 @@ def classify_document(doc: LoadedDocument) -> Classification:
 
 
 def load_training_csv(path: Path) -> tuple[list[str], list[str]]:
-    """CSV com colunas: file_name, content, label (ou text, label)."""
+    """CSV com colunas: file_name, content, label (ou text, label). Ignora label vazio."""
     texts: list[str] = []
     labels: list[str] = []
-    with path.open(encoding="utf-8", newline="") as fh:
+    skipped = 0
+    with path.open(encoding="utf-8-sig", newline="") as fh:
         reader = csv.DictReader(fh)
         for row in reader:
-            label = parse_label(row.get("label") or row.get("rotulo") or "").value
+            raw_label = (row.get("label") or row.get("rotulo") or "").strip()
+            if not raw_label:
+                skipped += 1
+                continue
+            label = parse_label(raw_label).value
             if "text" in row and row["text"]:
                 texts.append(row["text"])
             else:
@@ -232,4 +237,6 @@ def load_training_csv(path: Path) -> tuple[list[str], list[str]]:
                     )
                 )
             labels.append(label)
+    if skipped:
+        print(f"(ignoradas {skipped} linhas sem label)")
     return texts, labels

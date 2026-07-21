@@ -1,0 +1,54 @@
+ROTULAGEM MANUAL (tipo 3)
+=========================
+
+PASSO A PASSO
+-------------
+1. Abra o terminal na pasta do projeto:
+   cd codevasf-conformidade-12sr
+
+2. Gere o CSV a partir dos documentos de UMA entidade (pasta ou ZIP):
+
+   python scripts/prepare_manual_labels.py --docs-dir "C:\caminho\pasta_extraida"
+
+   ou
+
+   python scripts/prepare_manual_labels.py --zip "C:\caminho\envio.zip"
+
+   Opcional: já sugere o label (você só corrige):
+   python scripts/prepare_manual_labels.py --zip "C:\envio.zip" --suggest
+
+3. Abra no Excel o arquivo:
+   data\ml\para_rotular.csv
+
+4. Preencha a coluna "label" com UM destes valores (exatamente assim):
+
+   oficio
+   cnpj
+   federal          ← CND Receita / Dívida Ativa
+   fgts             ← CRF Caixa
+   cndt             ← trabalhista
+   posse
+   diploma
+   rg_cpf           ← RG, CPF, CNH
+   eleitoral
+   residencia
+   doacao_onerosa   ← aceitação 1% ou 1,5%
+   impedimento      ← FOR-198 (NÃO é onerosa!)
+   plano_uso
+   estatuto
+   ata_diretoria
+   outro
+   ilegivel
+
+5. Salve o CSV (UTF-8).
+
+6. Treine o modelo:
+
+   python scripts/train_doc_classifier.py --csv data/ml/para_rotular.csv
+
+7. (Opcional) Commit do modelo novo e redeploy do Space.
+
+DICA
+----
+Comece com 1–2 pacotes (~20–40 arquivos). Não precisa rotular milhares.
+O arquivo modelo_rotulagem_manual.csv mostra o formato correto.

@@ -1,0 +1,18 @@
+file_name,content,label
+OFICIO_EXEMPLO.pdf,"Ofício ao Superintendente da CODEVASF. Requeremos doação de bens móveis.",oficio
+CARTAO_CNPJ.pdf,"Cadastro Nacional da Pessoa Jurídica CNPJ 04.252.011/0001-10",cnpj
+CND_RECEITA.pdf,"Certidão Conjunta de Débitos Relativos a Tributos Federais e à Dívida Ativa da União. Válida até 15/08/2026.",federal
+CRF_FGTS.pdf,"Certificado de Regularidade do FGTS - CRF. Caixa Econômica Federal.",fgts
+CNDT.pdf,"Certidão Negativa de Débitos Trabalhistas - CNDT. Tribunal Superior do Trabalho.",cndt
+ATA_POSSE.pdf,"Ata de Posse. Transmito o cargo de Prefeito Municipal. Empossado.",posse
+DIPLOMA.pdf,"Diploma. Fica diplomado o eleito Prefeito Municipal.",diploma
+CNH.pdf,"Carteira Nacional de Habilitação. CPF 529.982.247-25. Registro Geral.",rg_cpf
+QUITACAO_ELEITORAL.pdf,"Certidão de quitação eleitoral. Justiça Eleitoral.",eleitoral
+COMP_RESIDENCIA.pdf,"Comprovante de residência. Conta de energia. Endereço do titular.",residencia
+DECLARACAO_DOACAO_ONEROSA.pdf,"Declaro a aceitação à modalidade de Doação Onerosa com contrapartida de 1% do valor total da doação.",doacao_onerosa
+FOR.198_IMPEDIMENTO.pdf,"Declaração de Não Ocorrência de Impedimentos. Art. 39 da Lei nº 13.019/2014. FOR – 198.",impedimento
+FOR.196_PLANO_USO.pdf,"Plano de Uso do bem móvel. Destinação social do equipamento. FOR-196.",plano_uso
+ESTATUTO.pdf,"Estatuto Social da Associação. Assembleia de constituição.",estatuto
+ATA_DIRETORIA.pdf,"Ata de eleição da diretoria. Assembleia elegeu a presidência.",ata_diretoria
+SCAN_RUIM.pdf,"|||| ~~ texto ilegivel",ilegivel
+OUTRO.pdf,"Memorando interno sem relação com o checklist.",outro
