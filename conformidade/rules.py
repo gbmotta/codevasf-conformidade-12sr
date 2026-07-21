@@ -286,6 +286,102 @@ class RuleDecision:
     resultado: ItemResultado | None = None
 
 
+def _ml_boost_for_hints(doc: LoadedDocument, hints: list[str]) -> tuple[float, str]:
+    """Retorna (boost 0–4, nota) do classificador ML / heurística."""
+    try:
+        from conformidade.ml.classifier import get_classifier
+        from conformidade.ml.schema import HINT_TO_LABEL, INCOMPATIBLE
+    except Exception:
+        return 0.0, ""
+
+    expected = HINT_TO_LABEL.get(hints[0]) if hints else None
+    if expected is None:
+        return 0.0, ""
+
+    pred = get_classifier().predict_document(doc)
+    if pred.label in INCOMPATIBLE.get(expected, frozenset()) and pred.confidence >= 0.55:
+        return -3.0, f"ml={pred.label.value}({pred.confidence:.2f})"
+    if pred.label == expected:
+        return 2.0 * pred.confidence, f"ml={pred.label.value}({pred.confidence:.2f})"
+    return 0.0, f"ml={pred.label.value}({pred.confidence:.2f})"
+
+
+def _apply_validade_check(
+    item: ChecklistItem,
+    hints: list[str],
+    best_doc: LoadedDocument,
+    docs_names: list[str],
+    status: StatusConformidade,
+    motivo: str,
+) -> RuleDecision:
+    """Para certidões: se validade vencida → parcial/não atendido."""
+    if status != StatusConformidade.ATENDIDO:
+        return RuleDecision(
+            resolved=True,
+            resultado=ItemResultado(
+                numero=item.numero,
+                descricao=item.descricao,
+                status=status,
+                motivo=motivo,
+                documentos_relacionados=docs_names,
+                fonte="regra",
+            ),
+        )
+    if not any(h in {"federal", "fgts", "cndt"} for h in hints):
+        return RuleDecision(
+            resolved=True,
+            resultado=ItemResultado(
+                numero=item.numero,
+                descricao=item.descricao,
+                status=status,
+                motivo=motivo,
+                documentos_relacionados=docs_names,
+                fonte="regra",
+            ),
+        )
+    try:
+        from conformidade.ml.extractors import validade_status
+    except Exception:
+        return RuleDecision(
+            resolved=True,
+            resultado=ItemResultado(
+                numero=item.numero,
+                descricao=item.descricao,
+                status=status,
+                motivo=motivo,
+                documentos_relacionados=docs_names,
+                fonte="regra",
+            ),
+        )
+
+    st, _dt, msg = validade_status(best_doc.content)
+    if st == "vencida":
+        return RuleDecision(
+            resolved=True,
+            resultado=ItemResultado(
+                numero=item.numero,
+                descricao=item.descricao,
+                status=StatusConformidade.PARCIAL,
+                motivo=f"{motivo} {msg}",
+                documentos_relacionados=docs_names,
+                fonte="regra+ml",
+            ),
+        )
+    if st == "ok":
+        motivo = f"{motivo} {msg}"
+    return RuleDecision(
+        resolved=True,
+        resultado=ItemResultado(
+            numero=item.numero,
+            descricao=item.descricao,
+            status=status,
+            motivo=motivo,
+            documentos_relacionados=docs_names,
+            fonte="regra",
+        ),
+    )
+
+
 def evaluate_item_rules(
     item: ChecklistItem,
     documents: list[LoadedDocument],
@@ -299,13 +395,15 @@ def evaluate_item_rules(
     if "doacao_onerosa" in hints:
         return _evaluate_doacao_onerosa(item, documents)
 
-    ranked: list[tuple[int, int, LoadedDocument]] = []
+    ranked: list[tuple[float, int, int, LoadedDocument, str]] = []
     for doc in documents:
         fn = score_filename(doc, hints)
         ct = score_content(doc, hints)
-        if fn > 0 or ct > 0:
-            ranked.append((fn, ct, doc))
-    ranked.sort(key=lambda x: (x[0] + x[1], x[0], len(x[2].content)), reverse=True)
+        boost, note = _ml_boost_for_hints(doc, hints)
+        total = fn + ct + boost
+        if fn > 0 or ct > 0 or boost > 0.8:
+            ranked.append((total, fn, ct, doc, note))
+    ranked.sort(key=lambda x: (x[0], x[1], len(x[3].content)), reverse=True)
 
     if not ranked:
         return RuleDecision(
@@ -320,27 +418,47 @@ def evaluate_item_rules(
             ),
         )
 
-    best_fn, best_ct, best_doc = ranked[0]
-    total = best_fn + best_ct
-    docs_names = [d.file_name for _, _, d in ranked[:3]]
+    total, best_fn, best_ct, best_doc, ml_note = ranked[0]
+    docs_names = [d.file_name for _, _, _, d, _ in ranked[:3]]
     text_len = len(best_doc.content.strip())
     weak_text = text_len < 80 or best_doc.extraction_method in {"vazio", "erro"}
 
-    # Match forte de nome + conteúdo → atendido
-    if best_fn >= 3 and best_ct >= 2 and not weak_text:
+    # Classificador diz incompatível com confiança → não atende
+    if total < 0:
         return RuleDecision(
             resolved=True,
             resultado=ItemResultado(
                 numero=item.numero,
                 descricao=item.descricao,
-                status=StatusConformidade.ATENDIDO,
+                status=StatusConformidade.NAO_ATENDIDO,
                 motivo=(
-                    f"Arquivo compatível por regra automática ({best_doc.file_name}): "
-                    "nome e conteúdo indicam atendimento ao item."
+                    f"Arquivo {best_doc.file_name} classificado como tipo incompatível "
+                    f"com este item ({ml_note})."
                 ),
-                documentos_relacionados=docs_names,
-                fonte="regra",
+                documentos_relacionados=docs_names[:1],
+                fonte="regra+ml",
             ),
+        )
+
+    # Match forte de nome + conteúdo → atendido
+    if best_fn >= 3 and best_ct >= 2 and not weak_text:
+        motivo = (
+            f"Arquivo compatível por regra automática ({best_doc.file_name}): "
+            "nome e conteúdo indicam atendimento ao item."
+        )
+        if ml_note:
+            motivo += f" [{ml_note}]"
+        return _apply_validade_check(
+            item, hints, best_doc, docs_names, StatusConformidade.ATENDIDO, motivo
+        )
+
+    # ML confiante + algum sinal de nome/conteúdo → atendido
+    if total >= 4.5 and best_fn + best_ct >= 2 and not weak_text:
+        motivo = (
+            f"Arquivo compatível ({best_doc.file_name}) por regra+classificador. [{ml_note}]"
+        )
+        return _apply_validade_check(
+            item, hints, best_doc, docs_names, StatusConformidade.ATENDIDO, motivo
         )
 
     # Nome forte, texto fraco/OCR ruim → parcial sem IA
@@ -401,6 +519,17 @@ def select_relevant_docs(
         imped = [d for d in documents if is_impedimento_doc(d)]
         if imped:
             return imped[:limit]
+
+    # Matching TF-IDF + classificador (fallback para score por hints)
+    try:
+        from conformidade.ml.matching import rank_documents_for_item
+
+        ranked_ml = rank_documents_for_item(item, documents, limit=limit)
+        relevant = [d for d, s in ranked_ml if s > 0.05]
+        if relevant:
+            return relevant[:limit]
+    except Exception:
+        pass
 
     ranked = sorted(
         documents,

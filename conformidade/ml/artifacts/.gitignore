@@ -1,0 +1,5 @@
+# Ignora lixo local; versiona o modelo bootstrap treinado
+*
+!.gitignore
+!doc_classifier.joblib
+!doc_classifier_meta.json

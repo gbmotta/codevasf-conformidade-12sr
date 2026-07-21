@@ -1,0 +1,29 @@
+{
+  "labels": [
+    "ata_diretoria",
+    "cndt",
+    "cnpj",
+    "diploma",
+    "doacao_onerosa",
+    "eleitoral",
+    "estatuto",
+    "federal",
+    "fgts",
+    "ilegivel",
+    "impedimento",
+    "oficio",
+    "outro",
+    "plano_uso",
+    "posse",
+    "residencia",
+    "rg_cpf"
+  ],
+  "model_path": "C:\\Users\\gabriel.camara\\Documents\\Analises_Conformidade\\codevasf-conformidade-12sr\\conformidade\\ml\\artifacts\\doc_classifier.joblib",
+  "metrics": {
+    "n_samples": 68,
+    "n_classes": 17,
+    "cv_accuracy_mean": 0.9710144927536232,
+    "cv_accuracy_std": 0.04099169746008974
+  },
+  "from_seed": true
+}

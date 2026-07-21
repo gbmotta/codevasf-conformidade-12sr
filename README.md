@@ -172,6 +172,7 @@ Se o PDF não for parseável, o código usa **itens embutidos** (`FALLBACK_ITEMS
 | `conformidade/checklist.py` | Tipo de entidade, parse das listas PDF, fallback |
 | `conformidade/loaders.py` | ZIP/pasta, PDF/DOCX/imagem; delega OCR a `ocr.py` |
 | `conformidade/ocr.py` | Tesseract aprimorado (DPI 350, preprocess, PSM, por+eng, por página) |
+| `conformidade/ml/` | Classificador de docs, extratores, matching (sem LLM) |
 | `conformidade/rules.py` | Score por nome/conteúdo; decisões fortes sem LLM |
 | `conformidade/analyzer.py` | Pipeline completo + prompt JSON para itens pendentes |
 | `conformidade/llm.py` | Cliente unificado (`auto` / `ollama` / `zerogpu` / `hf`) |
@@ -376,6 +377,13 @@ codevasf-conformidade-12sr/
 │   ├── config.py
 │   ├── llm.py
 │   ├── loaders.py
+│   ├── ocr.py
+│   ├── ml/                     # ML clássico (sem LLM)
+│   │   ├── schema.py           # Rótulos de tipo de documento
+│   │   ├── classifier.py       # TF-IDF + LogisticRegression
+│   │   ├── extractors.py       # CNPJ / datas / validade
+│   │   ├── matching.py         # Item ↔ documento
+│   │   └── artifacts/          # Modelo .joblib treinado
 │   ├── models.py
 │   ├── report.py
 │   ├── rules.py
@@ -383,8 +391,10 @@ codevasf-conformidade-12sr/
 ├── checklists/
 │   ├── lista_associacoes.pdf
 │   └── lista_prefeituras.pdf
-├── config.yaml                 # Limites de contexto do LLM
-├── data/uploads/               # Temporários (gitignored, exceto .gitkeep)
+├── config.yaml                 # Limites de contexto + OCR
+├── data/
+│   ├── uploads/
+│   └── ml/                     # CSV de rótulos (export)
 ├── deploy/
 │   ├── README_HF.md            # Frontmatter + texto do Space Gradio
 │   ├── requirements-space.txt  # Deps enxutas do Space
@@ -393,7 +403,9 @@ codevasf-conformidade-12sr/
 │   ├── exemplo_equador.zip
 │   └── exemplo_prefeitura_acari.zip
 ├── scripts/
-│   └── deploy_hf_space.py
+│   ├── deploy_hf_space.py
+│   ├── export_doc_labels.py    # Exporta CSV de rótulos
+│   └── train_doc_classifier.py # Treina classificador
 ├── packages.txt                # Apt do Space (LF, sem comentários!)
 ├── requirements.txt            # Local + Docker Streamlit
 ├── Dockerfile
@@ -402,6 +414,38 @@ codevasf-conformidade-12sr/
 ├── .env.docker.example
 └── README.md                   # Este arquivo
 ```
+
+---
+
+## ML clássico (sem LLM)
+
+Objetivo: classificar documentos e extrair campos **antes** (ou no lugar) da chamada à IA.
+
+| Módulo | Função |
+|--------|--------|
+| `ml/schema.py` | Rótulos (`oficio`, `fgts`, `impedimento`, `doacao_onerosa`, …) |
+| `ml/heuristics.py` | Pseudo-rótulos por nome/conteúdo |
+| `ml/classifier.py` | TF-IDF + regressão logística (`scikit-learn`) |
+| `ml/extractors.py` | CNPJ/CPF válidos, datas, validade de certidão |
+| `ml/matching.py` | Ranking item ↔ arquivos por similaridade |
+
+Integração: `rules.py` usa o classificador como boost/penalidade e marca certidões **vencidas** como parcial.
+
+### Exportar rótulos e treinar
+
+```bash
+# 1) CSV a partir de seed + (opcional) relatórios JSON / pasta de PDFs
+python scripts/export_doc_labels.py --seed-only --out data/ml/labels.csv
+python scripts/export_doc_labels.py --reports-dir ./meus_relatorios_json --docs-root ./pacotes --out data/ml/labels.csv
+
+# 2) Treinar e gravar modelo em conformidade/ml/artifacts/
+python scripts/train_doc_classifier.py --from-seed
+python scripts/train_doc_classifier.py --csv data/ml/labels.csv
+```
+
+Relatórios JSON = saída de `RelatorioConformidade.to_dict()` (export da UI). Itens `atendido`/`parcial` geram linhas `(arquivo → rótulo do item)`.
+
+Sem modelo treinado, o sistema usa só a heurística (já cobre FOR-198 ≠ onerosa).
 
 ---
 
