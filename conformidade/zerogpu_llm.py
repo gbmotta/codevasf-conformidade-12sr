@@ -4,32 +4,74 @@ Inferência com Transformers em Hugging Face ZeroGPU.
 Evita o endpoint pago ``router.huggingface.co`` (HTTP 402 quando créditos
 acabam). O modelo padrão é compacto (``Qwen/Qwen2.5-1.5B-Instruct``).
 
-Deve ser chamado de dentro de uma função decorada com ``@spaces.GPU``
-(veja ``app.py``). Fora do Space, o pacote ``spaces`` é no-op.
+No Space:
+  - carrega o modelo no nível do módulo (emulação CUDA fora de ``@spaces.GPU``);
+  - cada chamada a ``generate_chat`` pede GPU com duração ≤ 60s (cota free).
+
+Fora do Space, o pacote ``spaces`` é no-op e o modelo só carrega sob demanda.
 """
 
 from __future__ import annotations
 
 import os
 import threading
+from typing import Any
 
-import spaces
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+try:
+    import spaces
+except ImportError:  # local / CI sem pacote spaces
 
-# Modelo compacto o bastante para ZeroGPU.
+    class spaces:  # type: ignore[no-redef]
+        @staticmethod
+        def GPU(duration=None, **_kwargs):
+            def decorator(fn):
+                return fn
+
+            return decorator
+
+
 MODEL_ID = (
     os.getenv("ZEROGPU_MODEL")
     or os.getenv("HF_MODEL")
     or "Qwen/Qwen2.5-1.5B-Instruct"
 )
 
+# ZeroGPU free tier: lease padrão ~60s. Pedir mais gera "Expired ZeroGPU proxy token".
+_GPU_DURATION = int(os.getenv("ZEROGPU_DURATION", "55"))
+
+ON_SPACES = bool(
+    os.getenv("SPACE_ID")
+    or os.getenv("SPACES_ZERO_GPU")
+    or os.getenv("SPACE_REPO_NAME")
+)
+
 _lock = threading.Lock()
-_tokenizer: AutoTokenizer | None = None
-_model: AutoModelForCausalLM | None = None
+_tokenizer: Any = None
+_model: Any = None
 
 
-def _ensure_model() -> tuple[AutoTokenizer, AutoModelForCausalLM]:
+def _load_model():
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    tok = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
+    dtype = (
+        torch.bfloat16
+        if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+        else (torch.float16 if torch.cuda.is_available() else torch.float32)
+    )
+    mdl = AutoModelForCausalLM.from_pretrained(
+        MODEL_ID,
+        torch_dtype=dtype,
+        device_map="auto",
+        trust_remote_code=True,
+    )
+    if tok.pad_token_id is None and tok.eos_token_id is not None:
+        tok.pad_token_id = tok.eos_token_id
+    return tok, mdl
+
+
+def _ensure_model():
     global _tokenizer, _model
     if _model is not None and _tokenizer is not None:
         return _tokenizer, _model
@@ -37,31 +79,31 @@ def _ensure_model() -> tuple[AutoTokenizer, AutoModelForCausalLM]:
     with _lock:
         if _model is not None and _tokenizer is not None:
             return _tokenizer, _model
-
-        tok = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
-        dtype = (
-            torch.bfloat16
-            if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-            else (torch.float16 if torch.cuda.is_available() else torch.float32)
-        )
-        mdl = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID,
-            torch_dtype=dtype,
-            device_map="auto",
-            trust_remote_code=True,
-        )
-        if tok.pad_token_id is None and tok.eos_token_id is not None:
-            tok.pad_token_id = tok.eos_token_id
-        _tokenizer, _model = tok, mdl
-        return tok, mdl
+        _tokenizer, _model = _load_model()
+        return _tokenizer, _model
 
 
+# No Space: carrega na importação (recomendação HF ZeroGPU).
+if ON_SPACES:
+    try:
+        _tokenizer, _model = _load_model()
+    except Exception as exc:  # cold start sem rede / modelo indisponível
+        print(f"[zerogpu_llm] pré-carga falhou (lazy no 1º uso): {exc}")
+
+
+def _gpu_duration(*_args, **_kwargs) -> int:
+    return max(20, min(_GPU_DURATION, 60))
+
+
+@spaces.GPU(duration=_gpu_duration)
 def generate_chat(
     messages: list[dict[str, str]],
     temperature: float = 0.0,
-    max_new_tokens: int = 768,
+    max_new_tokens: int = 512,
 ) -> str:
-    """Gera resposta de chat. Deve ser chamado de dentro de @spaces.GPU."""
+    """Gera resposta de chat sob lease curto da ZeroGPU."""
+    import torch
+
     tokenizer, model = _ensure_model()
     prompt = tokenizer.apply_chat_template(
         messages,
@@ -71,6 +113,9 @@ def generate_chat(
     inputs = tokenizer([prompt], return_tensors="pt")
     device = next(model.parameters()).device
     inputs = {key: value.to(device) for key, value in inputs.items()}
+
+    # Cap defensivo: gerações longas estouram o lease de ~60s.
+    max_new_tokens = max(64, min(int(max_new_tokens), 640))
 
     gen_kwargs: dict = {
         "max_new_tokens": max_new_tokens,

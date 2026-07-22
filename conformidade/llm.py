@@ -236,9 +236,17 @@ def _chat_zerogpu(
         content = generate_chat(
             payload_messages,
             temperature=temperature,
-            max_new_tokens=1024,
+            max_new_tokens=512 if settings.on_spaces else 1024,
         ).strip()
     except Exception as exc:
+        err = str(exc)
+        if "Expired ZeroGPU" in err or "proxy token" in err.lower():
+            raise OllamaError(
+                "Lease da ZeroGPU expirou (~60s/chamada no free tier). "
+                "Entre em huggingface.co, recarregue a página do Space e tente de novo; "
+                "pacotes grandes podem precisar de mais de uma tentativa. "
+                f"Detalhe: {exc}"
+            ) from exc
         raise OllamaError(
             f"Falha na inferência ZeroGPU ({settings.zerogpu_model}): {exc}"
         ) from exc

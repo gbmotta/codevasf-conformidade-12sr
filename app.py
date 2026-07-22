@@ -23,15 +23,9 @@ from pathlib import Path
 import gradio as gr
 
 try:
-    import spaces
-except ImportError:  # ambiente local sem pacote spaces (HF Spaces traz o real)
-    class spaces:  # type: ignore[no-redef]
-        @staticmethod
-        def GPU(duration=None, **_kwargs):
-            def decorator(fn):
-                return fn
-
-            return decorator
+    import spaces  # noqa: F401 — necessário no Space ZeroGPU
+except ImportError:
+    spaces = None  # type: ignore[assignment]
 
 from app.styles import (
     GRADIO_CSS,
@@ -124,18 +118,6 @@ def _system_status() -> str:
         f"**LLM:** `{backend}` — {'OK' if ok else 'FALHA'} ({msg})\n\n"
         f"**OCR:** {'OK' if ocr_ok else 'FALHA'} ({ocr_msg})\n\n"
         f"**Modelo:** `{model}`"
-    )
-
-
-def _estimate_zerogpu_duration(_settings, _checklist, documents) -> int:
-    n = len(documents) if documents else 1
-    return 60 if n <= 25 else 90
-
-
-@spaces.GPU(duration=_estimate_zerogpu_duration)
-def _analisar_com_zerogpu(settings, checklist, documents):
-    return analisar_conformidade(
-        settings, checklist, documents, batch_size=10, on_progress=None
     )
 
 
@@ -384,12 +366,23 @@ def analisar(tipo_label: str, zip_file):
 
     try:
         backend = resolve_backend(settings)
-        if backend == "zerogpu":
-            relatorio = _analisar_com_zerogpu(settings, checklist, documents)
-        else:
-            relatorio = analisar_conformidade(settings, checklist, documents)
+        # ZeroGPU: @spaces.GPU fica em zerogpu_llm.generate_chat (leases curtos).
+        # Não envolver a análise inteira — OCR/regras queimavam os ~60s do free tier.
+        batch = 3 if backend == "zerogpu" else 5
+        relatorio = analisar_conformidade(
+            settings, checklist, documents, batch_size=batch
+        )
     except (OllamaError, ValueError) as exc:
         raise gr.Error(str(exc)) from exc
+    except Exception as exc:
+        err = str(exc)
+        if "Expired ZeroGPU" in err or "proxy token" in err.lower():
+            raise gr.Error(
+                "Lease da ZeroGPU expirou (limite ~60s por chamada no plano free). "
+                "Tente de novo logado em huggingface.co, com pacote menor, ou aguarde "
+                "a cota diária. Itens já resolvidos por regra continuam válidos na próxima tentativa."
+            ) from exc
+        raise
 
     md_path, xlsx_path, docx_path, pdf_path = _export_files(relatorio, work)
     labels_path = _export_labels_file(documents=documents, work=work)

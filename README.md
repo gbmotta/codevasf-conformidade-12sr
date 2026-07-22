@@ -714,6 +714,7 @@ Requisitos de TI: container Docker no ar, porta **8502** liberada, Ollama alcan�
 | Export PDF com fonte estranha | `fonts-dejavu-core` no Space; fpdf2 no `requirements` |
 | Token HF / deploy 401 | Token **write**; `hf auth whoami` |
 | ZeroGPU / 402 billing | Conta / cota / política de hardware do Hub |
+| `Expired ZeroGPU proxy token` | Lease GPU > ~60s (free) ou cota diária; recarregue logado; análise não envolve mais OCR na GPU |
 
 Logs do Space:
 
