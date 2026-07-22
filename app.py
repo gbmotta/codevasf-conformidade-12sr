@@ -23,9 +23,27 @@ from pathlib import Path
 import gradio as gr
 
 try:
-    import spaces  # noqa: F401 — necessário no Space ZeroGPU
-except ImportError:
-    spaces = None  # type: ignore[assignment]
+    import spaces
+except ImportError:  # local sem pacote spaces (HF Spaces traz o real)
+
+    class spaces:  # type: ignore[no-redef]
+        @staticmethod
+        def GPU(duration=None, **_kwargs):
+            def decorator(fn):
+                return fn
+
+            return decorator
+
+
+# Importa o gerador decorado (leases curtos por chamada LLM).
+from conformidade.zerogpu_llm import generate_chat as _zerogpu_generate_chat  # noqa: F401
+
+
+@spaces.GPU(duration=55)
+def _spaces_gpu_anchor() -> str:
+    """Âncora obrigatória: o Space exige @spaces.GPU detectável no startup de app.py."""
+    return "ok"
+
 
 from app.styles import (
     GRADIO_CSS,
