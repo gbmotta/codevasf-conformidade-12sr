@@ -202,8 +202,6 @@ def _load_documents_from_inputs(
 
 
 def render_item(item) -> None:
-    from conformidade.decision_log import format_log_markdown
-
     label, css = STATUS_UI[item.status]
     st.markdown(
         f"""
@@ -217,9 +215,16 @@ def render_item(item) -> None:
 """,
         unsafe_allow_html=True,
     )
-    if item.log_decisao:
-        with st.expander(f"Log de decisão — item {item.numero}", expanded=False):
-            st.markdown(format_log_markdown(item))
+
+
+def render_decision_log_panel(relatorio: RelatorioConformidade) -> None:
+    from conformidade.decision_log import format_relatorio_logs_markdown
+
+    with st.expander("Auditoria — log de decisão (regra / ML / LLM)", expanded=False):
+        st.caption(
+            "Painel técnico para rastrear classificações. Não faz parte do relatório principal."
+        )
+        st.markdown(format_relatorio_logs_markdown(relatorio.itens))
 
 
 def render_relatorio(relatorio: RelatorioConformidade) -> None:
@@ -364,6 +369,8 @@ def render_relatorio(relatorio: RelatorioConformidade) -> None:
     with tabs[3]:
         for item in relatorio.itens:
             render_item(item)
+
+    render_decision_log_panel(relatorio)
 
     with st.expander("Documentos analisados"):
         for name in relatorio.documentos_analisados:

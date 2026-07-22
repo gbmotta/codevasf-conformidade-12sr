@@ -88,6 +88,31 @@ def format_log_markdown(item: ItemResultado) -> str:
     return "\n".join(lines)
 
 
+def format_relatorio_logs_markdown(itens: list[ItemResultado]) -> str:
+    """Painel de auditoria (fora do detalhamento principal)."""
+    lines = [
+        "Logs por etapa (**regra** / **ml** / **llm** / **pos** / **humano**) "
+        "para auditoria de erros. Não substitui o motivo exibido no relatório.",
+        "",
+    ]
+    any_log = False
+    for item in itens:
+        logs = getattr(item, "log_decisao", None) or []
+        if not logs:
+            continue
+        any_log = True
+        lines.append(
+            f"**{item.numero}.** {item.descricao[:90]}"
+            f"{'…' if len(item.descricao) > 90 else ''}  \n"
+            f"`{item.status.value}` · fonte `{item.fonte}`"
+        )
+        lines.append(format_log_markdown(item))
+        lines.append("")
+    if not any_log:
+        return "_Nenhum log de decisão registrado nesta análise._"
+    return "\n".join(lines)
+
+
 def relatorio_decision_log(itens: list[ItemResultado]) -> list[dict]:
     """Lista plana para auditoria / export JSON."""
     rows = []

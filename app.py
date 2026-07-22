@@ -215,13 +215,14 @@ def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
         lines.append(f"**Motivo:** {item.motivo}")
         if item.documentos_relacionados:
             lines.append("**Arquivos:** " + ", ".join(item.documentos_relacionados))
-        if item.log_decisao:
-            from conformidade.decision_log import format_log_markdown
-
-            lines.append("**Log de decisão:**")
-            lines.append(format_log_markdown(item))
         lines.append("")
     return "\n".join(lines)
+
+
+def _format_decision_log_panel(relatorio: RelatorioConformidade) -> str:
+    from conformidade.decision_log import format_relatorio_logs_markdown
+
+    return format_relatorio_logs_markdown(relatorio.itens)
 
 
 def _inventario_html(documents: list[LoadedDocument]) -> str:
@@ -275,6 +276,7 @@ def _empty_analysis_outputs():
         "",  # cards
         "",  # alerta validade
         "",  # resultado
+        "",  # log auditoria
         "",  # inventario
         None,  # state
         None,
@@ -318,6 +320,7 @@ def analisar(tipo_label: str, zip_file):
         "",
         "",
         "Extraindo e lendo documentos (OCR se necessário)...",
+        "",  # log auditoria
         "",
         None,
         None,
@@ -348,6 +351,7 @@ def analisar(tipo_label: str, zip_file):
         "",
         alerta_html,
         "Aplicando regras determinísticas (nome/conteúdo)...",
+        "",  # log auditoria
         inv_html,
         None,
         None,
@@ -368,6 +372,7 @@ def analisar(tipo_label: str, zip_file):
         "",
         alerta_html,
         "Avaliando itens pendentes com IA...",
+        "",  # log auditoria
         inv_html,
         None,
         None,
@@ -428,6 +433,7 @@ def analisar(tipo_label: str, zip_file):
         _resumo_cards_html(relatorio),
         alerta_html,
         _format_relatorio_md(relatorio),
+        _format_decision_log_panel(relatorio),
         inv_html,
         state_dict,
         md_path,
@@ -502,6 +508,7 @@ def salvar_item_revisao(item_label: str, status: str, motivo: str, state_dict):
         replace_relatorio_in_state(state_dict, revisado),
         _resumo_cards_html(revisado),
         _format_relatorio_md(revisado),
+        _format_decision_log_panel(revisado),
         gr.update(choices=_item_choices(revisado), value=item_label),
     )
 
@@ -520,6 +527,7 @@ def gerar_relatorio_revisado(state_dict):
     return (
         _resumo_cards_html(relatorio),
         _format_relatorio_md(relatorio),
+        _format_decision_log_panel(relatorio),
         replace_relatorio_in_state(state_dict, relatorio),
         md_path,
         xlsx_path,
@@ -890,6 +898,24 @@ def build_ui() -> gr.Blocks:
                         ],
                     )
 
+                with gr.Accordion(
+                    "Auditoria — log de decisão (regra / ML / LLM)",
+                    open=False,
+                    elem_classes=["cv-audit-accordion"],
+                ):
+                    gr.HTML(
+                        """
+                        <div class="cv-audit-intro">
+                          Painel técnico para rastrear por que cada item foi
+                          classificado. Fica recolhido para não poluir a leitura
+                          do relatório principal.
+                        </div>
+                        """
+                    )
+                    log_auditoria = gr.Markdown(
+                        elem_classes=["cv-audit-log"],
+                    )
+
             # =====================================================
             # RODAPÉ
             # =====================================================
@@ -914,6 +940,7 @@ def build_ui() -> gr.Blocks:
             resumo_cards,
             alerta_validade,
             resultado,
+            log_auditoria,
             inventario,
             state,
             md_out,
@@ -961,6 +988,7 @@ def build_ui() -> gr.Blocks:
                 state,
                 resumo_cards,
                 resultado,
+                log_auditoria,
                 item_select,
             ],
         )
@@ -971,6 +999,7 @@ def build_ui() -> gr.Blocks:
             outputs=[
                 resumo_cards,
                 resultado,
+                log_auditoria,
                 state,
                 md_out,
                 xlsx_out,

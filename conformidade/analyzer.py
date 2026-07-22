@@ -440,6 +440,7 @@ def analisar_conformidade(
                 probe = probe_signature(
                     text=doc.content,
                     file_path=Path(doc.source) if doc.source else None,
+                    extraction_method=getattr(doc, "extraction_method", None),
                 )
                 if probe.seems_unsigned:
                     unsigned = True

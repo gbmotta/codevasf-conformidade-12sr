@@ -1296,6 +1296,27 @@ body {
   box-shadow: none !important;
 }
 
+.cv-audit-accordion {
+  margin-top: 0.5rem !important;
+  opacity: 0.92;
+}
+
+.cv-audit-intro {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border-left: 3px solid #7a8a96;
+  background: #f4f6f8;
+  color: #4a5a66;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.cv-audit-log {
+  max-height: 28rem;
+  overflow: auto;
+  font-size: 0.9rem;
+}
+
 /* ---------- Área de envio ---------- */
 
 .cv-painel-envio {
