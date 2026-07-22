@@ -13,8 +13,41 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from conformidade.checklist import ChecklistItem
+from conformidade.decision_log import append_step, step, with_steps
 from conformidade.loaders import LoadedDocument
 from conformidade.models import ItemResultado, StatusConformidade
+
+
+def _make_result(
+    item: ChecklistItem,
+    status: StatusConformidade,
+    motivo: str,
+    docs: list[str],
+    *,
+    fonte: str = "regra",
+    etapas: list | None = None,
+) -> ItemResultado:
+    resultado = ItemResultado(
+        numero=item.numero,
+        descricao=item.descricao,
+        status=status,
+        motivo=motivo,
+        documentos_relacionados=docs,
+        fonte=fonte,
+    )
+    if etapas:
+        with_steps(resultado, *etapas)
+    else:
+        append_step(
+            resultado,
+            step(
+                "regra",
+                motivo,
+                status=status,
+                documentos=docs,
+            ),
+        )
+    return resultado
 
 
 def _normalize(text: str) -> str:
@@ -286,6 +319,36 @@ class RuleDecision:
     resultado: ItemResultado | None = None
 
 
+def _finalize_decision(decision: RuleDecision) -> RuleDecision:
+    """Garante log_decisao mínimo em resultados de regra."""
+    if decision.resultado and not decision.resultado.log_decisao:
+        append_step(
+            decision.resultado,
+            step(
+                "regra",
+                decision.resultado.motivo,
+                status=decision.resultado.status,
+                documentos=decision.resultado.documentos_relacionados,
+            ),
+        )
+    # Marca etapa ML se fonte contém ml e ainda não há passo ml
+    r = decision.resultado
+    if r and "ml" in (r.fonte or "") and not any(
+        (x.get("etapa") == "ml") for x in (r.log_decisao or []) if isinstance(x, dict)
+    ):
+        append_step(
+            r,
+            step(
+                "ml",
+                f"Classificador/heurística contribuiu (fonte={r.fonte}).",
+                status=r.status,
+                documentos=r.documentos_relacionados,
+            ),
+        )
+    return decision
+
+
+
 def _ml_boost_for_hints(doc: LoadedDocument, hints: list[str]) -> tuple[float, str]:
     """Retorna (boost 0–4, nota) do classificador ML / heurística."""
     try:
@@ -395,6 +458,13 @@ def _apply_validade_check(
 
 
 def evaluate_item_rules(
+    item: ChecklistItem,
+    documents: list[LoadedDocument],
+) -> RuleDecision:
+    return _finalize_decision(_evaluate_item_rules_impl(item, documents))
+
+
+def _evaluate_item_rules_impl(
     item: ChecklistItem,
     documents: list[LoadedDocument],
 ) -> RuleDecision:

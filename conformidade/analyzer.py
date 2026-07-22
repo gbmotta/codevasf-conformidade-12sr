@@ -18,6 +18,7 @@ from pathlib import Path
 
 from conformidade.checklist import Checklist, ChecklistItem, label_tipo
 from conformidade.config import Settings
+from conformidade.decision_log import append_step, step
 from conformidade.llm import ChatMessage, chat_completion
 from conformidade.loaders import LoadedDocument
 from conformidade.models import (
@@ -261,6 +262,8 @@ def analisar_conformidade(
     documents: list[LoadedDocument],
     batch_size: int = 3,
     on_progress: Callable[[str], None] | None = None,
+    *,
+    rules_only: bool = False,
 ) -> RelatorioConformidade:
     if not documents:
         raise ValueError("Nenhum documento para analisar.")
@@ -287,6 +290,38 @@ def analisar_conformidade(
             f"{len(pending_llm)} vão para a IA..."
         )
 
+    if pending_llm and rules_only:
+        for item in pending_llm:
+            resultado = ItemResultado(
+                numero=item.numero,
+                descricao=item.descricao,
+                status=StatusConformidade.NAO_ATENDIDO,
+                motivo=(
+                    "Item não resolvido por regra automática; LLM omitido "
+                    "(modo rules_only / teste)."
+                ),
+                documentos_relacionados=[],
+                fonte="regra",
+            )
+            append_step(
+                resultado,
+                step(
+                    "regra",
+                    "Sem decisão forte por nome/conteúdo.",
+                    status=StatusConformidade.NAO_ATENDIDO,
+                ),
+            )
+            append_step(
+                resultado,
+                step(
+                    "llm",
+                    "Pulado (rules_only=True).",
+                    status=StatusConformidade.NAO_ATENDIDO,
+                ),
+            )
+            all_results[item.numero] = resultado
+        pending_llm = []
+
     if pending_llm:
         total_batches = (len(pending_llm) + batch_size - 1) // batch_size
         for index, start in enumerate(range(0, len(pending_llm), batch_size), start=1):
@@ -299,7 +334,26 @@ def analisar_conformidade(
             parsed, raw = _analyze_batch(
                 settings, checklist, batch, documents, inventory
             )
-            all_results.update(parsed)
+            for num, resultado in parsed.items():
+                append_step(
+                    resultado,
+                    step(
+                        "regra",
+                        "Encaminhado à IA (regra sem decisão definitiva).",
+                        meta={"lote": index},
+                    ),
+                )
+                append_step(
+                    resultado,
+                    step(
+                        "llm",
+                        resultado.motivo,
+                        status=resultado.status,
+                        documentos=resultado.documentos_relacionados,
+                        lote=index,
+                    ),
+                )
+                all_results[num] = resultado
             raw_parts.append(raw)
 
     ordered = [all_results[item.numero] for item in items if item.numero in all_results]
@@ -339,6 +393,7 @@ def analisar_conformidade(
                     )
                 ):
                     if item.status == StatusConformidade.ATENDIDO:
+                        prev = item.status
                         item.status = StatusConformidade.PARCIAL
                         item.motivo = (
                             f"{item.motivo} CNPJ divergente entre documentos do pacote "
@@ -346,6 +401,16 @@ def analisar_conformidade(
                         ).strip()
                         if "ml" not in item.fonte:
                             item.fonte = f"{item.fonte}+ml"
+                        append_step(
+                            item,
+                            step(
+                                "pos",
+                                f"CNPJ divergente vs principal {cnpj_principal}.",
+                                status=item.status,
+                                documentos=item.documentos_relacionados,
+                                status_antes=prev.value,
+                            ),
+                        )
     except Exception:
         pass
 
@@ -388,6 +453,15 @@ def analisar_conformidade(
                 alertas.append(f"Item {item.numero}: possível sem assinatura ({reason})")
                 if "ml" not in item.fonte:
                     item.fonte = f"{item.fonte}+ml"
+                append_step(
+                    item,
+                    step(
+                        "pos",
+                        f"Possível ausência de assinatura/carimbo: {reason}",
+                        status=item.status,
+                        documentos=item.documentos_relacionados,
+                    ),
+                )
     except Exception:
         pass
 
@@ -409,13 +483,27 @@ def analisar_conformidade(
     if cnpj_principal:
         resumo += f" CNPJ: {cnpj_principal}."
 
+    # Anexa log resumido na resposta bruta (auditoria)
+    from conformidade.decision_log import relatorio_decision_log
+    import json as _json
+
+    audit = relatorio_decision_log(ordered)
+    audit_block = _json.dumps(audit, ensure_ascii=False, indent=2)
+    raw_joined = "\n\n===== LOTE =====\n\n".join(raw_parts)
+    if audit:
+        raw_joined = (
+            raw_joined
+            + "\n\n===== LOG_DECISAO =====\n\n"
+            + audit_block
+        )
+
     return RelatorioConformidade(
         tipo=checklist.tipo,
         entidade_detectada=entidade,
         resumo=resumo,
         itens=ordered,
         documentos_analisados=[doc.relative_path for doc in documents],
-        resposta_bruta="\n\n===== LOTE =====\n\n".join(raw_parts),
+        resposta_bruta=raw_joined,
         revisado=False,
         alertas=alertas,
         cnpj_principal=cnpj_principal,

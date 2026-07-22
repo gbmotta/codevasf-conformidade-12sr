@@ -522,6 +522,15 @@ streamlit run app/streamlit_app.py
 python app.py
 ```
 
+### Testes automatizados (pacotes ouro)
+
+```powershell
+pip install -r requirements.txt
+pytest tests/ -q
+```
+
+Pacotes de referência: **Equador** e **Acari** (`examples/*.zip`) e **Grossos** (fixture sintética). Os testes rodam em `rules_only=True` (sem LLM) e assertam status críticos + presença de `log_decisao` (regra / ML / LLM).
+
 ### Linux / macOS
 
 ```bash

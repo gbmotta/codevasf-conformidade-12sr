@@ -57,7 +57,8 @@ class ItemResultado:
     status: StatusConformidade
     motivo: str
     documentos_relacionados: list[str] = field(default_factory=list)
-    fonte: str = "ia"  # regra | ia | humano
+    fonte: str = "ia"  # regra | ia | humano | regra+ml | …
+    log_decisao: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -73,6 +74,7 @@ class ItemResultado:
             motivo=str(data.get("motivo", "")),
             documentos_relacionados=list(data.get("documentos_relacionados") or []),
             fonte=str(data.get("fonte", "ia")),
+            log_decisao=list(data.get("log_decisao") or []),
         )
 
 
@@ -147,6 +149,18 @@ def aplicar_revisao_humana(
         new_status = normalize_status(str(row.get("status", item.status.value)))
         new_motivo = str(row.get("motivo") or item.motivo).strip() or item.motivo
         if new_status != item.status or new_motivo != item.motivo:
+            from conformidade.decision_log import append_step, step
+
+            append_step(
+                item,
+                step(
+                    "humano",
+                    f"Revisão humana: {item.status.value} → {new_status.value}. {new_motivo}",
+                    status=new_status,
+                    documentos=item.documentos_relacionados,
+                    status_antes=item.status.value,
+                ),
+            )
             item.status = new_status
             item.motivo = new_motivo
             item.fonte = "humano"

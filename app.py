@@ -215,6 +215,11 @@ def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
         lines.append(f"**Motivo:** {item.motivo}")
         if item.documentos_relacionados:
             lines.append("**Arquivos:** " + ", ".join(item.documentos_relacionados))
+        if item.log_decisao:
+            from conformidade.decision_log import format_log_markdown
+
+            lines.append("**Log de decisão:**")
+            lines.append(format_log_markdown(item))
         lines.append("")
     return "\n".join(lines)
 

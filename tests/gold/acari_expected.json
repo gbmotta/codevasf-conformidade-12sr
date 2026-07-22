@@ -1,0 +1,22 @@
+{
+  "nome": "acari",
+  "zip": "examples/exemplo_prefeitura_acari.zip",
+  "tipo": "prefeitura",
+  "descricao": "Prefeitura de Acari/RN — pacote ouro (regras críticas)",
+  "asserts": {
+    "1": {
+      "status_in": ["atendido", "parcial"],
+      "hints_contains": ["oficio"],
+      "motivo_contains": ["Oficio", "ofício", "assinatura", "regra"]
+    },
+    "2": {"status": "atendido", "hints_contains": ["cnpj"]},
+    "5": {"status": "atendido", "hints_contains": ["cndt"]},
+    "6": {"status_in": ["atendido", "parcial"], "hints_contains": ["posse"]},
+    "11": {
+      "status": "nao_atendido",
+      "hints_contains": ["doacao_onerosa"],
+      "motivo_contains": ["FOR-198", "Impedimento", "impedimento"]
+    },
+    "12": {"status": "atendido", "hints_contains": ["plano_uso"]}
+  }
+}

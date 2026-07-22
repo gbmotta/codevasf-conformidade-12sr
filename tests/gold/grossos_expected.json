@@ -1,0 +1,18 @@
+{
+  "nome": "grossos_z38",
+  "tipo": "associacao",
+  "synthetic": true,
+  "descricao": "Colônia Z-38 Grossos — FOR-198 ≠ onerosa; ata fraca",
+  "asserts": {
+    "9": {
+      "status": "nao_atendido",
+      "hints_contains": ["doacao_onerosa"],
+      "motivo_contains": ["FOR-198", "Impedimento", "impedimento"],
+      "log_etapas_contains": ["regra"]
+    },
+    "3": {
+      "status_in": ["parcial", "nao_atendido"],
+      "hints_contains": ["ata_diretoria"]
+    }
+  }
+}

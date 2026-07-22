@@ -1,0 +1,17 @@
+{
+  "nome": "equador",
+  "zip": "examples/exemplo_equador.zip",
+  "tipo": "prefeitura",
+  "descricao": "Prefeitura de Equador/RN — pacote ouro (regras críticas)",
+  "asserts": {
+    "2": {"status": "atendido", "hints_contains": ["cnpj"]},
+    "5": {"status": "atendido", "hints_contains": ["cndt"]},
+    "9": {"status": "nao_atendido", "hints_contains": ["eleitoral"]},
+    "11": {
+      "status": "nao_atendido",
+      "hints_contains": ["doacao_onerosa"],
+      "motivo_contains": ["FOR-198", "Impedimento", "impedimento"]
+    },
+    "12": {"status": "atendido", "hints_contains": ["plano_uso"]}
+  }
+}

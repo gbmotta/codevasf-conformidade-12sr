@@ -202,6 +202,8 @@ def _load_documents_from_inputs(
 
 
 def render_item(item) -> None:
+    from conformidade.decision_log import format_log_markdown
+
     label, css = STATUS_UI[item.status]
     st.markdown(
         f"""
@@ -215,6 +217,9 @@ def render_item(item) -> None:
 """,
         unsafe_allow_html=True,
     )
+    if item.log_decisao:
+        with st.expander(f"Log de decisão — item {item.numero}", expanded=False):
+            st.markdown(format_log_markdown(item))
 
 
 def render_relatorio(relatorio: RelatorioConformidade) -> None:

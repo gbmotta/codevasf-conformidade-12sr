@@ -113,7 +113,10 @@ def deploy(username: str, space_name: str, token: str) -> str:
         repo_id=repo_id,
         repo_type="space",
         token=token,
-        commit_message="Fix: FOR-198 não conta como Doação/Cessão Onerosa",
+        commit_message=os.environ.get(
+            "HF_COMMIT_MESSAGE",
+            "Logs de decisão por item e testes ouro (Equador/Acari/Grossos)",
+        ),
     )
 
     try:
@@ -147,7 +150,13 @@ def main() -> None:
 
     token = args.token
     if not token:
-        for candidate in (ROOT / "huggin_token.txt", Path.home() / "Documentos" / "huggin_token.txt"):
+        candidates = (
+            ROOT / "huggin_token.txt",
+            ROOT / "hf_token.txt",
+            ROOT.parent / "hf_token.txt",
+            Path.home() / "Documentos" / "huggin_token.txt",
+        )
+        for candidate in candidates:
             if candidate.exists():
                 token = candidate.read_text(encoding="utf-8").strip()
                 break
