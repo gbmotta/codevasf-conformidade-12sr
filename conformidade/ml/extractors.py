@@ -157,24 +157,41 @@ def validade_status(
     *,
     referencia: date | None = None,
     margem_dias: int = 0,
+    alerta_dias: int | None = None,
 ) -> tuple[str, date | None, str]:
     """
     Retorna (status, data, motivo) com status em:
-      ok | vencida | sem_data | duvida
+      ok | a_vencer | vencida | sem_data | duvida
+
+    ``alerta_dias``: se a validade cair dentro desta janela, status = a_vencer.
+    Padrão: variável VALIDADE_ALERTA_DIAS ou 30.
     """
+    import os
+
     ref = referencia or date.today()
+    if alerta_dias is None:
+        alerta_dias = int(os.getenv("VALIDADE_ALERTA_DIAS", "30"))
+
     fields = extract_fields(text)
     if fields.validade is None:
         return "sem_data", None, "Não foi possível extrair data de validade no texto."
     limite = fields.validade + timedelta(days=margem_dias)
-    if limite < ref:
+    dias = (limite - ref).days
+    data_fmt = fields.validade.strftime("%d/%m/%Y")
+    if dias < 0:
         return (
             "vencida",
             fields.validade,
-            f"Validade extraída {fields.validade.strftime('%d/%m/%Y')} está vencida.",
+            f"Validade {data_fmt} está vencida há {abs(dias)} dia(s).",
+        )
+    if dias <= alerta_dias:
+        return (
+            "a_vencer",
+            fields.validade,
+            f"Validade {data_fmt}: faltam {dias} dia(s) (alerta ≤ {alerta_dias}d).",
         )
     return (
         "ok",
         fields.validade,
-        f"Validade extraída {fields.validade.strftime('%d/%m/%Y')} aparenta vigente.",
+        f"Validade {data_fmt}: vigente, faltam {dias} dia(s).",
     )

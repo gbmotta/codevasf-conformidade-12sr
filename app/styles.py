@@ -738,6 +738,26 @@ footer {{
   background: #fff1d6;
   color: #8a5a00;
 }}
+.cv-inv-badge.type-fgts {{ background: #e3f2fd; color: #0d47a1; }}
+.cv-inv-badge.type-federal {{ background: #e8eaf6; color: #283593; }}
+.cv-inv-badge.type-cndt {{ background: #f3e5f5; color: #6a1b9a; }}
+.cv-inv-badge.type-impedimento {{ background: #fce4ec; color: #880e4f; }}
+.cv-inv-badge.type-doacao_onerosa {{ background: #e8f5e9; color: #1b5e20; }}
+.cv-inv-badge.type-oficio {{ background: #e0f2f1; color: #00695c; }}
+.cv-inv-badge.type-cnpj {{ background: #fff8e1; color: #f57f17; }}
+.cv-inv-badge.val-vencida {{ background: #fde2e2; color: #9b1c1c; }}
+.cv-inv-badge.val-avencer {{ background: #fff3cd; color: #856404; }}
+.cv-inv-badge.val-ok {{ background: #d7f0e5; color: #0b6b3a; }}
+.cv-validade-alerts {{
+  margin: 0.75rem 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #f0d78c;
+  background: #fffbeb;
+}}
+.cv-validade-alerts h3 {{ margin: 0 0 0.5rem; font-size: 0.95rem; color: #856404; }}
+.cv-validade-vencida {{ color: #9b1c1c; }}
+.cv-validade-a-vencer {{ color: #856404; }}
 .cv-inv-meta {{
   color: {COLOR_MUTED};
   font-size: 0.78rem;
@@ -1672,6 +1692,47 @@ body {
 .cv-inv-badge.ocr {
   background: #fff2d7;
   color: #8b5a00;
+}
+
+.cv-inv-badge.type-fgts { background: #e3f2fd; color: #0d47a1; }
+.cv-inv-badge.type-federal { background: #e8eaf6; color: #283593; }
+.cv-inv-badge.type-cndt { background: #f3e5f5; color: #6a1b9a; }
+.cv-inv-badge.type-impedimento { background: #fce4ec; color: #880e4f; }
+.cv-inv-badge.type-doacao_onerosa { background: #e8f5e9; color: #1b5e20; }
+.cv-inv-badge.type-oficio { background: #e0f2f1; color: #00695c; }
+.cv-inv-badge.type-cnpj { background: #fff8e1; color: #f57f17; }
+.cv-inv-badge.type-outro,
+.cv-inv-badge.type-ilegivel { background: #eceff1; color: #455a64; }
+.cv-inv-badge.val-vencida { background: #fde2e2; color: #9b1c1c; }
+.cv-inv-badge.val-avencer { background: #fff3cd; color: #856404; }
+.cv-inv-badge.val-ok { background: #d7f0e5; color: #0b6b3a; }
+
+.cv-validade-alerts {
+  margin: 0.75rem 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #f0d78c;
+  background: #fffbeb;
+}
+.cv-validade-alerts h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #856404;
+}
+.cv-validade-alerts ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.cv-validade-alerts li { margin: 0.25rem 0; font-size: 0.88rem; }
+.cv-validade-vencida { color: #9b1c1c; }
+.cv-validade-a-vencer { color: #856404; }
+.cv-labels-export {
+  margin-top: 0.75rem !important;
+  gap: 0.75rem !important;
+  align-items: center !important;
+}
+.cv-btn-export-labels {
+  max-width: 22rem !important;
 }
 
 .cv-inv-meta {

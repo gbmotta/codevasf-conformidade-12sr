@@ -35,13 +35,17 @@ from conformidade.checklist import (
 )
 from conformidade.config import load_settings
 from conformidade.llm import OllamaError, check_llm_health, resolve_backend
+from conformidade.inventory_ui import (
+    build_inventory,
+    collect_validade_alerts,
+    labels_csv_bytes,
+)
 from conformidade.loaders import (
     LoadedDocument,
     load_from_zip,
     ocr_available,
     save_uploaded_bytes,
     scan_folder,
-    summarize_inventory,
 )
 from conformidade.models import (
     RelatorioConformidade,
@@ -69,6 +73,7 @@ def init_session_state() -> None:
         "session_dir": None,
         "relatorio": None,
         "inventory_text": "",
+        "inventory_entries": None,
         "tipo_selecionado": "Prefeitura",
     }
     for key, value in defaults.items():
@@ -90,7 +95,30 @@ def _cleanup_session_dir() -> None:
     st.session_state.documents = None
     st.session_state.relatorio = None
     st.session_state.inventory_text = ""
+    st.session_state.inventory_entries = None
 
+
+def _refresh_inventory(documents: list[LoadedDocument]) -> None:
+    entries = build_inventory(documents)
+    st.session_state.inventory_entries = entries
+    lines = []
+    for e in entries:
+        conf = f"{e.confidence * 100:.0f}%"
+        val = ""
+        if e.validade_status == "vencida":
+            val = " | VENCIDA"
+        elif e.validade_status == "a_vencer":
+            val = f" | faltam {e.validade_dias}d"
+        lines.append(
+            f"- [{e.label} {conf}] {e.relative_path} ({e.chars} car., {e.method}){val}"
+        )
+    alerts = collect_validade_alerts(entries)
+    if alerts:
+        lines.append("")
+        lines.append("ALERTAS DE VALIDADE:")
+        for a in alerts:
+            lines.append(f"  ! {a.file_name}: {a.validade_msg}")
+    st.session_state.inventory_text = "\n".join(lines) if lines else "(vazio)"
 
 def render_sidebar(settings) -> None:
     st.sidebar.markdown("### Rede interna · 12ª SR")
@@ -279,6 +307,17 @@ def render_relatorio(relatorio: RelatorioConformidade) -> None:
             use_container_width=True,
         )
 
+    entries = st.session_state.get("inventory_entries")
+    if entries:
+        st.download_button(
+            "Exportar rótulos desta análise (CSV)",
+            data=labels_csv_bytes(entries),
+            file_name=f"rotulos_para_treino_{stamp}.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="dl_labels_relatorio",
+        )
+
     tabs = st.tabs(
         [
             f"Atendidos ({counts['atendido']})",
@@ -415,7 +454,7 @@ def main() -> None:
                 settings, uploaded_zips, uploaded_files, folder_path
             )
             st.session_state.documents = documents
-            st.session_state.inventory_text = summarize_inventory(documents)
+            _refresh_inventory(documents)
             st.session_state.relatorio = None
             if not documents:
                 st.warning("Nenhum documento legível encontrado.")
@@ -432,8 +471,17 @@ def main() -> None:
             st.error(f"Falha ao carregar documentos: {exc}")
 
     if st.session_state.documents:
-        with st.expander("Inventário dos documentos carregados", expanded=True):
+        with st.expander("Inventário tipado dos documentos", expanded=True):
             st.text(st.session_state.inventory_text)
+            entries = st.session_state.get("inventory_entries") or []
+            if entries:
+                st.download_button(
+                    "Exportar rótulos desta análise (CSV)",
+                    data=labels_csv_bytes(entries),
+                    file_name=f"rotulos_para_treino_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
 
     st.divider()
 
@@ -450,7 +498,7 @@ def main() -> None:
                     settings, uploaded_zips, uploaded_files, folder_path
                 )
                 st.session_state.documents = documents
-                st.session_state.inventory_text = summarize_inventory(documents)
+                _refresh_inventory(documents)
             except Exception as exc:
                 st.error(f"Falha ao carregar documentos: {exc}")
                 return
@@ -487,6 +535,15 @@ def main() -> None:
                 progress.empty()
                 bar.progress(1.0, text="Análise concluída")
                 st.session_state.relatorio = relatorio
+                _refresh_inventory(documents)
+                alerts = collect_validade_alerts(st.session_state.inventory_entries or [])
+                if alerts:
+                    st.warning(
+                        "Alertas de validade: "
+                        + "; ".join(
+                            f"{a.file_name} ({a.validade_msg})" for a in alerts[:5]
+                        )
+                    )
             except (OllamaError, ValueError) as exc:
                 progress.empty()
                 bar.empty()

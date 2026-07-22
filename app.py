@@ -58,6 +58,16 @@ from conformidade.report import (
     relatorio_para_pdf,
     relatorio_para_xlsx,
 )
+from conformidade.inventory_ui import (
+    build_inventory,
+    inventory_html,
+    pack_app_state,
+    replace_relatorio_in_state,
+    unpack_inventory,
+    unpack_relatorio,
+    validade_alerts_html,
+    write_labels_csv,
+)
 
 STATUS_BADGE = {
     StatusConformidade.ATENDIDO: (
@@ -200,39 +210,23 @@ def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
 
 
 def _inventario_html(documents: list[LoadedDocument]) -> str:
-    if not documents:
-        return '<p class="cv-muted">Nenhum arquivo no inventário.</p>'
-    rows = ['<div class="cv-inventory"><h3>Inventário dos arquivos</h3><ul>']
-    for doc in documents:
-        ext = Path(doc.file_name).suffix.lower() or "?"
-        method = (doc.extraction_method or "texto").lower()
-        ocr = method in {"ocr", "hibrido"}
-        badge = (
-            '<span class="cv-inv-badge ocr">OCR</span>'
-            if ocr
-            else '<span class="cv-inv-badge">Texto</span>'
-        )
-        kind = {
-            ".pdf": "PDF",
-            ".docx": "Word",
-            ".doc": "Word",
-            ".png": "Img",
-            ".jpg": "Img",
-            ".jpeg": "Img",
-            ".tif": "Img",
-            ".tiff": "Img",
-        }.get(ext, ext.replace(".", "").upper() or "Arq")
-        chars = f"{len(doc.content):,}".replace(",", ".")
-        rows.append(
-            "<li>"
-            f'<span class="cv-inv-kind">{kind}</span>'
-            f'<span class="cv-inv-name">{doc.relative_path}</span>'
-            f"{badge}"
-            f'<span class="cv-inv-meta">{chars} caracteres</span>'
-            "</li>"
-        )
-    rows.append("</ul></div>")
-    return "".join(rows)
+    return inventory_html(build_inventory(documents))
+
+
+def _export_labels_file(
+    documents: list[LoadedDocument] | None = None,
+    state_dict: dict | None = None,
+    work: Path | None = None,
+) -> str | None:
+    entries = unpack_inventory(state_dict) if state_dict else []
+    if not entries and documents:
+        entries = build_inventory(documents)
+    if not entries:
+        return None
+    out_dir = (work or Path(tempfile.mkdtemp(prefix="conf_out_"))) / "saida"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = write_labels_csv(entries, out_dir / "rotulos_para_treino.csv")
+    return str(path)
 
 
 def _item_choices(relatorio: RelatorioConformidade) -> list[str]:
@@ -264,13 +258,15 @@ def _empty_analysis_outputs():
     return (
         "",  # progresso
         "",  # cards
+        "",  # alerta validade
         "",  # resultado
         "",  # inventario
         None,  # state
         None,
         None,
         None,
-        None,  # files
+        None,  # md xlsx docx pdf
+        None,  # labels csv
         gr.update(visible=True),  # painel envio
         gr.update(visible=False),  # painel resultado
         gr.update(choices=[], value=None),  # item select
@@ -305,8 +301,10 @@ def analisar(tipo_label: str, zip_file):
     yield (
         _progress_html(1),
         "",
+        "",
         "Extraindo e lendo documentos (OCR se necessário)...",
         "",
+        None,
         None,
         None,
         None,
@@ -325,12 +323,18 @@ def analisar(tipo_label: str, zip_file):
     if not documents:
         raise gr.Error("Nenhum documento legível encontrado no ZIP.")
 
+    inventory_entries = build_inventory(documents)
+    inv_html = inventory_html(inventory_entries)
+    alerta_html = validade_alerts_html(inventory_entries)
+
     # Etapa 2 — Regras
     yield (
         _progress_html(2),
         "",
+        alerta_html,
         "Aplicando regras determinísticas (nome/conteúdo)...",
-        _inventario_html(documents),
+        inv_html,
+        None,
         None,
         None,
         None,
@@ -347,8 +351,10 @@ def analisar(tipo_label: str, zip_file):
     yield (
         _progress_html(3),
         "",
+        alerta_html,
         "Avaliando itens pendentes com IA...",
-        _inventario_html(documents),
+        inv_html,
+        None,
         None,
         None,
         None,
@@ -371,6 +377,8 @@ def analisar(tipo_label: str, zip_file):
         raise gr.Error(str(exc)) from exc
 
     md_path, xlsx_path, docx_path, pdf_path = _export_files(relatorio, work)
+    labels_path = _export_labels_file(documents=documents, work=work)
+    state_dict = pack_app_state(relatorio, inventory_entries)
     choices = _item_choices(relatorio)
     first = choices[0] if choices else None
     first_item = relatorio.itens[0] if relatorio.itens else None
@@ -379,13 +387,15 @@ def analisar(tipo_label: str, zip_file):
     yield (
         _progress_html(4),
         _resumo_cards_html(relatorio),
+        alerta_html,
         _format_relatorio_md(relatorio),
-        _inventario_html(documents),
-        relatorio.to_dict(),
+        inv_html,
+        state_dict,
         md_path,
         xlsx_path,
         docx_path,
         pdf_path,
+        labels_path,
         gr.update(visible=False),
         gr.update(visible=True),
         gr.update(choices=choices, value=first),
@@ -416,7 +426,9 @@ def carregar_item_revisao(item_label: str, state_dict):
     """Preenche dropdown/motivo ao trocar o item selecionado."""
     if not state_dict or not item_label:
         return gr.update(), gr.update()
-    relatorio = RelatorioConformidade.from_dict(state_dict)
+    relatorio = unpack_relatorio(state_dict)
+    if relatorio is None:
+        return gr.update(), gr.update()
     numero = _parse_item_numero(item_label)
     for item in relatorio.itens:
         if item.numero == numero:
@@ -434,7 +446,9 @@ def salvar_item_revisao(item_label: str, status: str, motivo: str, state_dict):
     numero = _parse_item_numero(item_label)
     if numero is None:
         raise gr.Error("Selecione um item da lista.")
-    relatorio = RelatorioConformidade.from_dict(state_dict)
+    relatorio = unpack_relatorio(state_dict)
+    if relatorio is None:
+        raise gr.Error("Estado da análise inválido.")
     revisado = aplicar_revisao_humana(
         relatorio,
         [
@@ -446,7 +460,7 @@ def salvar_item_revisao(item_label: str, status: str, motivo: str, state_dict):
         ],
     )
     return (
-        revisado.to_dict(),
+        replace_relatorio_in_state(state_dict, revisado),
         _resumo_cards_html(revisado),
         _format_relatorio_md(revisado),
         gr.update(choices=_item_choices(revisado), value=item_label),
@@ -457,19 +471,33 @@ def gerar_relatorio_revisado(state_dict):
     """Gera exports a partir do estado já revisado."""
     if not state_dict:
         raise gr.Error("Execute a análise antes de revisar.")
-    relatorio = RelatorioConformidade.from_dict(state_dict)
+    relatorio = unpack_relatorio(state_dict)
+    if relatorio is None:
+        raise gr.Error("Estado da análise inválido.")
     if not relatorio.revisado:
         relatorio = replace(relatorio, revisado=True)
     md_path, xlsx_path, docx_path, pdf_path = _export_files(relatorio)
+    labels_path = _export_labels_file(state_dict=state_dict)
     return (
         _resumo_cards_html(relatorio),
         _format_relatorio_md(relatorio),
-        relatorio.to_dict(),
+        replace_relatorio_in_state(state_dict, relatorio),
         md_path,
         xlsx_path,
         docx_path,
         pdf_path,
+        labels_path,
     )
+
+
+def exportar_rotulos_csv(state_dict):
+    """Gera/baixa CSV de rótulos da análise atual (para treino manual)."""
+    if not state_dict:
+        raise gr.Error("Execute a análise antes de exportar rótulos.")
+    path = _export_labels_file(state_dict=state_dict)
+    if not path:
+        raise gr.Error("Nenhum documento no inventário para rotular.")
+    return path
 
 
 def nova_analise():
@@ -689,6 +717,7 @@ def build_ui() -> gr.Blocks:
                     )
 
                 resumo_cards = gr.HTML()
+                alerta_validade = gr.HTML()
 
                 # -------------------------------------------------
                 # DETALHAMENTO
@@ -703,11 +732,20 @@ def build_ui() -> gr.Blocks:
                 # -------------------------------------------------
 
                 with gr.Accordion(
-                    "Documentos analisados",
+                    "Documentos analisados (inventário tipado)",
                     open=False,
                     elem_classes=["cv-inventory-accordion"],
                 ):
                     inventario = gr.HTML()
+                    with gr.Row(elem_classes=["cv-labels-export"]):
+                        btn_export_labels = gr.Button(
+                            "Exportar rótulos desta análise (CSV)",
+                            elem_classes=["cv-btn-export-labels"],
+                        )
+                        labels_out = gr.File(
+                            label="CSV de rótulos para treino",
+                            elem_classes=["cv-download", "cv-download-labels"],
+                        )
 
                 # -------------------------------------------------
                 # REVISÃO HUMANA
@@ -835,6 +873,7 @@ def build_ui() -> gr.Blocks:
         analysis_outputs = [
             progresso,
             resumo_cards,
+            alerta_validade,
             resultado,
             inventario,
             state,
@@ -842,6 +881,7 @@ def build_ui() -> gr.Blocks:
             xlsx_out,
             docx_out,
             pdf_out,
+            labels_out,
             painel_envio,
             painel_resultado,
             item_select,
@@ -897,7 +937,14 @@ def build_ui() -> gr.Blocks:
                 xlsx_out,
                 docx_out,
                 pdf_out,
+                labels_out,
             ],
+        )
+
+        btn_export_labels.click(
+            fn=exportar_rotulos_csv,
+            inputs=[state],
+            outputs=[labels_out],
         )
 
     return demo

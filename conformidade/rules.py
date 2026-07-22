@@ -367,6 +367,18 @@ def _apply_validade_check(
                 fonte="regra+ml",
             ),
         )
+    if st == "a_vencer":
+        return RuleDecision(
+            resolved=True,
+            resultado=ItemResultado(
+                numero=item.numero,
+                descricao=item.descricao,
+                status=StatusConformidade.PARCIAL,
+                motivo=f"{motivo} {msg}",
+                documentos_relacionados=docs_names,
+                fonte="regra+ml",
+            ),
+        )
     if st == "ok":
         motivo = f"{motivo} {msg}"
     return RuleDecision(
