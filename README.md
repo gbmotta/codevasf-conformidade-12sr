@@ -448,6 +448,8 @@ python scripts/prepare_manual_labels.py --zip "C:\envio.zip" --suggest
 python scripts/train_doc_classifier.py --csv data/ml/para_rotular.csv
 ```
 
+**Pela UI:** após analisar um ZIP, abra *Documentos analisados (inventário tipado)* e use **Exportar rótulos desta análise (CSV)**. O inventário mostra o tipo (`fgts`, `impedimento`…) com confiança; alertas de validade (vencida / faltam X dias) aparecem acima do resultado.
+
 Modelo de formato: `data/ml/modelo_rotulagem_manual.csv`.
 
 ---
