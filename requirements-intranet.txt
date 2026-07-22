@@ -1,0 +1,6 @@
+# Dependências extras da intranet (Docker) — NÃO usar no HF Space
+# Inclui PaddleOCR (melhor em atas/CNH escaneados).
+-r requirements.txt
+paddlepaddle>=2.6.0
+paddleocr>=2.7.0
+numpy>=1.24.0

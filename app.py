@@ -193,9 +193,19 @@ def _format_relatorio_md(relatorio: RelatorioConformidade) -> str:
         "",
         relatorio.resumo,
         "",
-        "---",
-        "",
     ]
+    if relatorio.cnpj_principal:
+        lines.append(f"**CNPJ do pacote:** {relatorio.cnpj_principal}")
+        lines.append("")
+    if relatorio.alertas:
+        lines.append("### Alertas")
+        for a in relatorio.alertas:
+            lines.append(f"- {a}")
+        lines.append("")
+    if relatorio.history_id:
+        lines.append(f"*Histórico:* `{relatorio.history_id}`")
+        lines.append("")
+    lines.extend(["---", ""])
     for item in relatorio.itens:
         badge = STATUS_BADGE[item.status]
         lines.append(
@@ -378,6 +388,19 @@ def analisar(tipo_label: str, zip_file):
 
     md_path, xlsx_path, docx_path, pdf_path = _export_files(relatorio, work)
     labels_path = _export_labels_file(documents=documents, work=work)
+    try:
+        from conformidade.history import save_analysis
+
+        meta = save_analysis(
+            relatorio,
+            zip_name=local_zip.name,
+            alertas=list(relatorio.alertas or []),
+            cnpj=relatorio.cnpj_principal,
+            inventory=[e.to_dict() for e in inventory_entries],
+        )
+        relatorio.history_id = meta.id
+    except Exception:
+        pass
     state_dict = pack_app_state(relatorio, inventory_entries)
     choices = _item_choices(relatorio)
     first = choices[0] if choices else None

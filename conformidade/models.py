@@ -85,6 +85,9 @@ class RelatorioConformidade:
     documentos_analisados: list[str]
     resposta_bruta: str = ""
     revisado: bool = False
+    alertas: list[str] = field(default_factory=list)
+    cnpj_principal: str | None = None
+    history_id: str | None = None
 
     @property
     def contagem(self) -> dict[str, int]:
@@ -106,6 +109,9 @@ class RelatorioConformidade:
             "documentos_analisados": list(self.documentos_analisados),
             "resposta_bruta": self.resposta_bruta,
             "revisado": self.revisado,
+            "alertas": list(self.alertas),
+            "cnpj_principal": self.cnpj_principal,
+            "history_id": self.history_id,
         }
 
     @classmethod
@@ -118,6 +124,9 @@ class RelatorioConformidade:
             documentos_analisados=list(data.get("documentos_analisados") or []),
             resposta_bruta=str(data.get("resposta_bruta", "")),
             revisado=bool(data.get("revisado", False)),
+            alertas=list(data.get("alertas") or []),
+            cnpj_principal=data.get("cnpj_principal"),
+            history_id=data.get("history_id"),
         )
 
 

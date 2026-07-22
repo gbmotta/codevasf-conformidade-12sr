@@ -30,8 +30,8 @@ OCR_MAX_PAGES = int(os.getenv("OCR_MAX_PAGES", "40"))
 OCR_DPI = int(os.getenv("OCR_DPI", "350"))
 OCR_LANG = os.getenv("OCR_LANG", "por+eng")
 OCR_PSM = os.getenv("OCR_PSM", "6")  # bloco uniforme de texto
-OCR_ENGINE = os.getenv("OCR_ENGINE", "tesseract").strip().lower()  # tesseract | easyocr | auto
-# Se Tesseract extrair menos que isto (página/imagem), tenta EasyOCR no modo auto
+OCR_ENGINE = os.getenv("OCR_ENGINE", "tesseract").strip().lower()  # tesseract | paddleocr | easyocr | auto
+# Se Tesseract extrair menos que isto (página/imagem), tenta EasyOCR/Paddle no modo auto
 OCR_MIN_CHARS = int(os.getenv("OCR_MIN_CHARS", "50"))
 OCR_PREPROCESS = os.getenv("OCR_PREPROCESS", "1").strip() not in {"0", "false", "False", "no"}
 # OSD/orientação: útil, mas lento — ligado por padrão só se OCR_OSD=1
@@ -43,11 +43,18 @@ OCR_ALLOW_EASYOCR = os.getenv("OCR_ALLOW_EASYOCR", "0").strip() not in {
     "False",
     "no",
 }
+# PaddleOCR na intranet: OCR_ENGINE=paddleocr ou auto + OCR_ALLOW_PADDLE=1
+OCR_ALLOW_PADDLE = os.getenv("OCR_ALLOW_PADDLE", "0").strip() not in {
+    "0",
+    "false",
+    "False",
+    "no",
+}
 
 
 def _apply_yaml_ocr_defaults() -> None:
     """Aplica defaults de config.yaml se a variável de ambiente correspondente não existir."""
-    global OCR_MAX_PAGES, OCR_DPI, OCR_LANG, OCR_ENGINE, OCR_PREPROCESS, OCR_OSD, OCR_ALLOW_EASYOCR
+    global OCR_MAX_PAGES, OCR_DPI, OCR_LANG, OCR_ENGINE, OCR_PREPROCESS, OCR_OSD, OCR_ALLOW_EASYOCR, OCR_ALLOW_PADDLE
     try:
         import yaml
     except ImportError:
@@ -74,6 +81,8 @@ def _apply_yaml_ocr_defaults() -> None:
         OCR_OSD = bool(ocr_cfg["osd"])
     if "OCR_ALLOW_EASYOCR" not in os.environ and "allow_easyocr" in ocr_cfg:
         OCR_ALLOW_EASYOCR = bool(ocr_cfg["allow_easyocr"])
+    if "OCR_ALLOW_PADDLE" not in os.environ and "allow_paddle" in ocr_cfg:
+        OCR_ALLOW_PADDLE = bool(ocr_cfg["allow_paddle"])
 
 
 _apply_yaml_ocr_defaults()
@@ -350,15 +359,41 @@ def _ocr_easyocr(img) -> str:
 
 
 def ocr_pil_image(img, idioma: str | None = None) -> str:
-    """OCR de uma imagem PIL: Tesseract e, se habilitado, EasyOCR."""
+    """OCR de uma imagem PIL: Tesseract, PaddleOCR e/ou EasyOCR."""
     engine = OCR_ENGINE
     tess_text = ""
+
+    if engine == "paddleocr":
+        try:
+            from conformidade.ml.paddle_ocr import ocr_paddle, paddle_importable
+
+            if paddle_importable():
+                return ocr_paddle(img).strip()
+        except Exception:
+            pass
+        # fallback tesseract se paddle falhar
+        engine = "tesseract"
 
     if engine in {"tesseract", "auto"}:
         try:
             tess_text = _ocr_tesseract(img, idioma).strip()
         except Exception:
             tess_text = ""
+
+    # Paddle no modo auto quando Tesseract fraco
+    allow_paddle = engine == "paddleocr" or (
+        engine == "auto" and OCR_ALLOW_PADDLE
+    )
+    if allow_paddle and len(tess_text) < OCR_MIN_CHARS:
+        try:
+            from conformidade.ml.paddle_ocr import ocr_paddle, paddle_importable
+
+            if paddle_importable():
+                paddle_text = ocr_paddle(img).strip()
+                if _score_ocr_text(paddle_text) > _score_ocr_text(tess_text):
+                    return paddle_text
+        except Exception:
+            pass
 
     allow_easy = engine == "easyocr" or (
         engine == "auto" and OCR_ALLOW_EASYOCR and _easyocr_importable()

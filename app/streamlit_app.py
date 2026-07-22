@@ -35,6 +35,8 @@ from conformidade.checklist import (
 )
 from conformidade.config import load_settings
 from conformidade.llm import OllamaError, check_llm_health, resolve_backend
+from conformidade.batch import analyze_zip_batch
+from conformidade.history import compare_history, list_history, load_history, save_analysis
 from conformidade.inventory_ui import (
     build_inventory,
     collect_validade_alerts,
@@ -225,8 +227,14 @@ def render_relatorio(relatorio: RelatorioConformidade) -> None:
         f"**Entidade / município:** {relatorio.entidade_detectada}  \n"
         f"**Checklist:** {label_tipo(relatorio.tipo)}  \n"
         f"**Versão:** {versao}"
+        + (f"  \n**CNPJ:** {relatorio.cnpj_principal}" if relatorio.cnpj_principal else "")
+        + (f"  \n**Histórico:** `{relatorio.history_id}`" if relatorio.history_id else "")
     )
     st.info(relatorio.resumo)
+    if relatorio.alertas:
+        with st.expander(f"Alertas do pacote ({len(relatorio.alertas)})", expanded=True):
+            for a in relatorio.alertas:
+                st.warning(a)
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Itens do checklist", len(relatorio.itens))
@@ -361,6 +369,118 @@ def render_relatorio(relatorio: RelatorioConformidade) -> None:
             st.code(relatorio.resposta_bruta, language="json")
 
 
+
+def _render_historico_tab() -> None:
+    st.markdown("#### Histórico de pacotes analisados")
+    st.caption("Reabra um relatório salvo ou compare duas versões.")
+    metas = list_history(limit=80)
+    if not metas:
+        st.info("Nenhuma análise salva ainda. Rode uma análise individual ou em lote.")
+        return
+
+    labels = [
+        f"{m.created_at} · {m.entidade} · A{m.atendidos}/P{m.parciais}/N{m.nao_atendidos} · {m.id}"
+        for m in metas
+    ]
+    choice = st.selectbox("Pacote", options=labels, key="hist_select")
+    meta = metas[labels.index(choice)]
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Atendidos", meta.atendidos)
+    c2.metric("Parciais", meta.parciais)
+    c3.metric("Não atendidos", meta.nao_atendidos)
+    st.caption(f"ZIP: {meta.zip_name or '—'} · CNPJ: {meta.cnpj or '—'}")
+
+    if st.button("Reabrir este relatório", key="hist_reopen"):
+        _, rel = load_history(meta.id)
+        st.session_state.relatorio = rel
+        st.success("Relatório carregado na sessão.")
+        render_relatorio(rel)
+
+    st.divider()
+    st.markdown("##### Comparar duas versões")
+    ids = [m.id for m in metas]
+    a = st.selectbox("Versão A", ids, key="cmp_a")
+    b = st.selectbox("Versão B", ids, index=min(1, len(ids) - 1), key="cmp_b")
+    if st.button("Comparar status dos itens", key="cmp_btn") and a != b:
+        rows = compare_history(a, b)
+        changed = [r for r in rows if r["mudou"]]
+        st.write(f"{len(changed)} item(ns) com status diferente de {len(rows)}.")
+        st.dataframe(rows, use_container_width=True)
+
+
+def _render_lote_tab(settings) -> None:
+    st.markdown("#### Análise em lote → planilha consolidada")
+    st.caption("Vários ZIPs → XLSX (estilo controle 201–220) + histórico.")
+    tipo_label = st.radio(
+        "Tipo do lote",
+        options=["Associação / Cooperativa", "Prefeitura"],
+        horizontal=True,
+        key="lote_tipo",
+    )
+    tipo = (
+        TipoEntidade.PREFEITURA
+        if tipo_label.startswith("Prefeitura")
+        else TipoEntidade.ASSOCIACAO
+    )
+    zips = st.file_uploader(
+        "ZIPs do lote",
+        type=["zip"],
+        accept_multiple_files=True,
+        key="lote_zips",
+    )
+    if st.button("Analisar lote e gerar planilha", type="primary", key="lote_run"):
+        if not zips:
+            st.warning("Envie ao menos um ZIP.")
+            return
+        healthy, llm_message = check_llm_health(settings)
+        if not healthy:
+            st.error("IA indisponível: " + llm_message)
+            return
+        session = _new_session_dir(settings.uploads_path)
+        paths = []
+        for up in zips:
+            paths.append(save_uploaded_bytes(up.name, up.getvalue(), session / "lote_zips"))
+        prog = st.empty()
+
+        def _p(msg: str) -> None:
+            prog.info(msg)
+
+        with st.spinner("Processando lote..."):
+            result = analyze_zip_batch(
+                settings,
+                paths,
+                tipo,
+                save_history=True,
+                work_dir=session / "work",
+                on_progress=_p,
+            )
+        prog.empty()
+        xlsx = result.to_xlsx_bytes()
+        stamp = datetime.now().strftime("%Y%m%d_%H%M")
+        st.success(f"Concluído: {len(result.rows)} pacote(s).")
+        st.dataframe(
+            [
+                {
+                    "ITEM": r.ordem,
+                    "BENEFICIÁRIO": r.beneficiario,
+                    "SITUAÇÃO": r.situacao,
+                    "A/P/N": f"{r.atendidos}/{r.parciais}/{r.nao_atendidos}",
+                    "CNPJ": r.cnpj,
+                }
+                for r in result.rows
+            ],
+            use_container_width=True,
+        )
+        st.download_button(
+            "Baixar planilha consolidada (.xlsx)",
+            data=xlsx,
+            file_name=f"CONTROLE_LOTE_Conformidade_{stamp}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+
+
 def main() -> None:
     settings = load_settings()
     init_session_state()
@@ -377,6 +497,31 @@ def main() -> None:
 
     render_sidebar(settings)
 
+    main_tab, hist_tab, lote_tab = st.tabs(
+        ["Análise individual", "Histórico / fila", "Lote consolidado"]
+    )
+
+    with hist_tab:
+        _render_historico_tab()
+
+    with lote_tab:
+        _render_lote_tab(settings)
+
+    with main_tab:
+        _render_analise_individual(settings)
+
+    st.markdown(
+        """
+<div class="cv-footer-note">
+  Codevasf — 12ª Superintendência Regional (Natal/RN) · Uso interno ·
+  Esta ferramenta não substitui a conferência humana da documentação.
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_analise_individual(settings) -> None:
     # --- Passo 1 ---
     st.markdown("#### 1. Tipo de solicitante")
     tipo_label = st.radio(
@@ -534,8 +679,19 @@ def main() -> None:
                 )
                 progress.empty()
                 bar.progress(1.0, text="Análise concluída")
+                zip_name = uploaded_zips[0].name if uploaded_zips else ''
+                inv = [e.to_dict() for e in (st.session_state.inventory_entries or [])]
+                meta = save_analysis(
+                    relatorio,
+                    zip_name=zip_name,
+                    alertas=list(relatorio.alertas or []),
+                    cnpj=relatorio.cnpj_principal,
+                    inventory=inv,
+                )
+                relatorio.history_id = meta.id
                 st.session_state.relatorio = relatorio
                 _refresh_inventory(documents)
+                st.success(f'Salvo no histórico: {meta.id}')
                 alerts = collect_validade_alerts(st.session_state.inventory_entries or [])
                 if alerts:
                     st.warning(
@@ -558,16 +714,6 @@ def main() -> None:
             unsafe_allow_html=True,
         )
 
-    st.markdown(
-        """
-<div class="cv-footer-note">
-  Codevasf — Companhia de Desenvolvimento dos Vales do São Francisco e do Parnaíba ·
-  12ª Superintendência Regional (Natal/RN) · Uso interno ·
-  Esta ferramenta não substitui a conferência humana da documentação.
-</div>
-""",
-        unsafe_allow_html=True,
-    )
 
 
 if __name__ == "__main__":

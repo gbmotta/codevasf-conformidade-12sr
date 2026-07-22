@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from pathlib import Path
 
 from conformidade.checklist import Checklist, ChecklistItem, label_tipo
 from conformidade.config import Settings
@@ -313,12 +314,100 @@ def analisar_conformidade(
     entidade = _detect_entity_name(documents)
     n_regra = sum(1 for i in ordered if i.fonte == "regra")
     n_ia = sum(1 for i in ordered if i.fonte == "ia")
+
+    # Pós-processamento: CNPJ cruzado + assinatura
+    alertas: list[str] = []
+    cnpj_principal = None
+    try:
+        from conformidade.ml.cnpj_check import cross_check_cnpj
+
+        cnpj_check = cross_check_cnpj(documents)
+        cnpj_principal = cnpj_check.principal
+        alertas.extend(cnpj_check.alertas)
+        if cnpj_check.divergentes:
+            for item in ordered:
+                desc = item.descricao.lower()
+                if any(
+                    k in desc
+                    for k in (
+                        "cnpj",
+                        "fgts",
+                        "tributos federais",
+                        "trabalhista",
+                        "ofício",
+                        "oficio",
+                    )
+                ):
+                    if item.status == StatusConformidade.ATENDIDO:
+                        item.status = StatusConformidade.PARCIAL
+                        item.motivo = (
+                            f"{item.motivo} CNPJ divergente entre documentos do pacote "
+                            f"(principal {cnpj_principal})."
+                        ).strip()
+                        if "ml" not in item.fonte:
+                            item.fonte = f"{item.fonte}+ml"
+    except Exception:
+        pass
+
+    try:
+        from conformidade.ml.signatures import (
+            SIGNATURE_REQUIRED_HINTS,
+            probe_signature,
+        )
+        from conformidade.rules import hints_for_item
+
+        for item in ordered:
+            hints = set(hints_for_item(item.descricao))
+            if not hints.intersection(SIGNATURE_REQUIRED_HINTS):
+                continue
+            if item.status == StatusConformidade.NAO_ATENDIDO:
+                continue
+            # Usa docs relacionados ou todos
+            related = [
+                d
+                for d in documents
+                if d.file_name in (item.documentos_relacionados or [])
+                or d.relative_path in (item.documentos_relacionados or [])
+            ] or documents[:3]
+            unsigned = False
+            reason = ""
+            for doc in related[:2]:
+                probe = probe_signature(
+                    text=doc.content,
+                    file_path=Path(doc.source) if doc.source else None,
+                )
+                if probe.seems_unsigned:
+                    unsigned = True
+                    reason = probe.reason
+                    break
+            if unsigned and item.status == StatusConformidade.ATENDIDO:
+                item.status = StatusConformidade.PARCIAL
+                item.motivo = (
+                    f"{item.motivo} Possível ausência de assinatura/carimbo: {reason}"
+                ).strip()
+                alertas.append(f"Item {item.numero}: possível sem assinatura ({reason})")
+                if "ml" not in item.fonte:
+                    item.fonte = f"{item.fonte}+ml"
+    except Exception:
+        pass
+
+    # Recalcula contagens após pós-processamento
+    counts = {
+        StatusConformidade.ATENDIDO.value: 0,
+        StatusConformidade.PARCIAL.value: 0,
+        StatusConformidade.NAO_ATENDIDO.value: 0,
+    }
+    for item in ordered:
+        counts[item.status.value] += 1
+
     resumo = (
         f"Análise para {label_tipo(checklist.tipo)} ({entidade}): "
         f"{counts['atendido']} atendido(s), {counts['parcial']} parcial(is), "
         f"{counts['nao_atendido']} não atendido(s), em {len(documents)} arquivo(s). "
         f"({n_regra} por regra, {n_ia} por IA)"
     )
+    if cnpj_principal:
+        resumo += f" CNPJ: {cnpj_principal}."
 
     return RelatorioConformidade(
         tipo=checklist.tipo,
@@ -328,4 +417,6 @@ def analisar_conformidade(
         documentos_analisados=[doc.relative_path for doc in documents],
         resposta_bruta="\n\n===== LOTE =====\n\n".join(raw_parts),
         revisado=False,
+        alertas=alertas,
+        cnpj_principal=cnpj_principal,
     )
