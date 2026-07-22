@@ -83,12 +83,8 @@ def _ensure_model():
         return _tokenizer, _model
 
 
-# No Space: carrega na importação (recomendação HF ZeroGPU).
-if ON_SPACES:
-    try:
-        _tokenizer, _model = _load_model()
-    except Exception as exc:  # cold start sem rede / modelo indisponível
-        print(f"[zerogpu_llm] pré-carga falhou (lazy no 1º uso): {exc}")
+# Não pré-carregar no import: no Space isso estoura o boot (timeout/OOM)
+# antes do Gradio subir. O modelo sobe no 1º generate_chat sob @spaces.GPU.
 
 
 def _gpu_duration(*_args, **_kwargs) -> int:

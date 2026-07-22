@@ -35,8 +35,8 @@ except ImportError:  # local sem pacote spaces (HF Spaces traz o real)
             return decorator
 
 
-# Importa o gerador decorado (leases curtos por chamada LLM).
-from conformidade.zerogpu_llm import generate_chat as _zerogpu_generate_chat  # noqa: F401
+# Âncora ZeroGPU no próprio app.py (detector do HF no startup).
+# generate_chat fica em zerogpu_llm e é importado sob demanda pelo llm.py.
 
 
 @spaces.GPU(duration=55)
