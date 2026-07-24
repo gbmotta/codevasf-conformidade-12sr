@@ -162,25 +162,40 @@ def _progress_html(step: int) -> str:
 
 def _resumo_cards_html(relatorio: RelatorioConformidade) -> str:
     counts = relatorio.contagem
+    total = max(len(relatorio.itens), 1)
     versao = "revisada" if relatorio.revisado else "automática"
+    pct = lambda n: f"{(100.0 * n / total):.0f}% do checklist"
+
     return f"""
-<div class="cv-resumo">
-  <div class="cv-resumo-head">
+<div class="pbi-kpi-board">
+  <div class="pbi-kpi-head">
     <strong>{label_tipo(relatorio.tipo)}</strong>
     <span>{relatorio.entidade_detectada} · análise {versao}</span>
   </div>
-  <div class="cv-cards">
-    <div class="cv-card-stat ok">
-      <span class="cv-card-num">{counts["atendido"]}</span>
-      <span class="cv-card-label">Atendidos</span>
+  <div class="pbi-kpi-row">
+    <div class="pbi-kpi">
+      <div class="pbi-kpi-accent total"></div>
+      <div class="pbi-kpi-label">Itens</div>
+      <span class="pbi-kpi-value">{total}</span>
+      <div class="pbi-kpi-sub">checklist completo</div>
     </div>
-    <div class="cv-card-stat parcial">
-      <span class="cv-card-num">{counts["parcial"]}</span>
-      <span class="cv-card-label">Parciais</span>
+    <div class="pbi-kpi">
+      <div class="pbi-kpi-accent ok"></div>
+      <div class="pbi-kpi-label">Atendidos</div>
+      <span class="pbi-kpi-value">{counts["atendido"]}</span>
+      <div class="pbi-kpi-sub">{pct(counts["atendido"])}</div>
     </div>
-    <div class="cv-card-stat nao">
-      <span class="cv-card-num">{counts["nao_atendido"]}</span>
-      <span class="cv-card-label">Não atendidos</span>
+    <div class="pbi-kpi">
+      <div class="pbi-kpi-accent parcial"></div>
+      <div class="pbi-kpi-label">Parciais</div>
+      <span class="pbi-kpi-value">{counts["parcial"]}</span>
+      <div class="pbi-kpi-sub">{pct(counts["parcial"])}</div>
+    </div>
+    <div class="pbi-kpi">
+      <div class="pbi-kpi-accent nao"></div>
+      <div class="pbi-kpi-label">Não atendidos</div>
+      <span class="pbi-kpi-value">{counts["nao_atendido"]}</span>
+      <div class="pbi-kpi-sub">{pct(counts["nao_atendido"])}</div>
     </div>
   </div>
 </div>
@@ -557,15 +572,15 @@ def _gradio_major() -> int:
 
 
 def build_ui() -> gr.Blocks:
-    """Monta a interface institucional em coluna única."""
+    """Monta a interface estilo dashboard Power BI."""
 
     hero_html = render_hero(
-        "Verificação assistida dos documentos exigidos para doação "
+        "Painel de verificação assistida dos documentos exigidos para doação "
         "e concessão de bens móveis."
     )
 
     blocks_kwargs: dict = {
-        "title": "Codevasf 12ª SR — Conformidade Documental"
+        "title": "Codevasf 12ª SR — Conformidade (Dashboard)"
     }
 
     if _gradio_major() < 6:

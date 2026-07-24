@@ -214,96 +214,53 @@ div[data-testid="stMetric"] {{
 
 
 def render_hero(subtitle: str | None = None) -> str:
-    """Cabeçalho compacto do sistema institucional."""
+    """Barra superior estilo Power BI (faixa amarela + chrome escuro)."""
     body = subtitle or (
         "Verificação assistida de documentos para doação e concessão "
         "de bens móveis."
     )
-
     logo = logo_data_uri()
     logo_html = (
-        f'<img class="cv-app-logo" src="{logo}" alt="Codevasf" />'
+        f'<img class="pbi-logo" src="{logo}" alt="Codevasf" />'
         if logo
-        else '<strong class="cv-app-logo-fallback">CODEVASF</strong>'
+        else '<span class="pbi-logo-text">CODEVASF</span>'
     )
-
     return f"""
-<header class="cv-app-header">
-  <div class="cv-app-header-main">
-    <div class="cv-app-brand">
+<div class="pbi-shell-header">
+  <div class="pbi-yellow-bar" aria-hidden="true"></div>
+  <header class="pbi-topbar">
+    <div class="pbi-topbar-brand">
       {logo_html}
-
-      <div class="cv-app-identification">
-        <span class="cv-app-institution">
-          Companhia de Desenvolvimento dos Vales do São Francisco e do Parnaíba
-        </span>
-
-        <h1>Análise de Conformidade Documental</h1>
-
-        <p>
-          12ª Superintendência Regional · Natal/RN
-        </p>
+      <div class="pbi-topbar-titles">
+        <span class="pbi-kicker">Codevasf · 12ª Superintendência Regional</span>
+        <h1>Conformidade Documental</h1>
+        <p class="pbi-topbar-sub">Natal/RN · Doação / concessão de bens móveis</p>
       </div>
     </div>
-
-    <div class="cv-app-status" aria-label="Característica do sistema">
-      <span class="cv-app-status-dot"></span>
-      Sistema assistivo
+    <div class="pbi-topbar-meta">
+      <span class="pbi-pill">Dashboard</span>
+      <span class="pbi-pill pbi-pill-live">Assistivo</span>
     </div>
-  </div>
-
-  <div class="cv-app-description">
+  </header>
+  <div class="pbi-subtitle-bar">
     <span>{body}</span>
-
-    <span class="cv-app-description-alert">
-      A decisão final permanece com a equipe técnica.
-    </span>
+    <span class="pbi-subtitle-alert">A decisão final permanece com a equipe técnica.</span>
   </div>
-</header>
+</div>
 """
 
 
 def render_steps() -> str:
-    """Fluxo resumido e compacto da atividade."""
+    """Faixa de etapas no estilo breadcrumb / filtro Power BI."""
     return """
-<nav class="cv-workflow" aria-label="Etapas da análise">
-  <div class="cv-workflow-item">
-    <span class="cv-workflow-number">1</span>
-    <span class="cv-workflow-content">
-      <strong>Envio</strong>
-      <small>Tipo e documentos</small>
-    </span>
-  </div>
-
-  <span class="cv-workflow-line"></span>
-
-  <div class="cv-workflow-item">
-    <span class="cv-workflow-number">2</span>
-    <span class="cv-workflow-content">
-      <strong>Leitura</strong>
-      <small>Extração e regras</small>
-    </span>
-  </div>
-
-  <span class="cv-workflow-line"></span>
-
-  <div class="cv-workflow-item">
-    <span class="cv-workflow-number">3</span>
-    <span class="cv-workflow-content">
-      <strong>Análise</strong>
-      <small>Validação assistida</small>
-    </span>
-  </div>
-
-  <span class="cv-workflow-line"></span>
-
-  <div class="cv-workflow-item">
-    <span class="cv-workflow-number">4</span>
-    <span class="cv-workflow-content">
-      <strong>Revisão</strong>
-      <small>Conferência e relatório</small>
-    </span>
-  </div>
+<nav class="pbi-workflow" aria-label="Etapas da análise">
+  <div class="pbi-workflow-item"><span>1</span> Envio</div>
+  <div class="pbi-workflow-sep" aria-hidden="true"></div>
+  <div class="pbi-workflow-item"><span>2</span> Leitura</div>
+  <div class="pbi-workflow-sep" aria-hidden="true"></div>
+  <div class="pbi-workflow-item"><span>3</span> Análise</div>
+  <div class="pbi-workflow-sep" aria-hidden="true"></div>
+  <div class="pbi-workflow-item"><span>4</span> Revisão</div>
 </nav>
 """
 
@@ -2197,34 +2154,398 @@ GRADIO_CSS += r"""
 
 
 def gradio_theme():
-    """Tema Gradio com paleta oficial do manual Codevasf."""
+    """Tema Gradio no visual dashboard Power BI / Fluent."""
     import gradio as gr
 
     return gr.themes.Soft(
-        primary_hue="blue",
-        secondary_hue="green",
+        primary_hue="yellow",
+        secondary_hue="slate",
         neutral_hue="slate",
-        font=[gr.themes.GoogleFont("IBM Plex Sans"), "Rawline", "Segoe UI", "sans-serif"],
+        font=["Segoe UI", "Segoe UI Web (West European)", "system-ui", "sans-serif"],
     ).set(
-        body_background_fill="#e8f4f0",
-        body_background_fill_dark="#e8f4f0",
+        body_background_fill="#F3F2F1",
+        body_background_fill_dark="#F3F2F1",
         block_background_fill="#ffffff",
-        block_border_color=COLOR_BORDER,
-        block_label_text_color=COLOR_AZUL_ESCURO,
-        block_title_text_color=COLOR_AZUL_ESCURO,
-        border_color_primary=COLOR_BORDER,
-        button_primary_background_fill=COLOR_VERDE_MARCA,
-        button_primary_background_fill_hover=COLOR_AZUL_MARCA,
-        button_primary_background_fill_dark=COLOR_VERDE_MARCA,
-        button_primary_background_fill_hover_dark=COLOR_AZUL_MARCA,
-        button_primary_text_color="#ffffff",
-        button_primary_text_color_dark="#ffffff",
+        block_border_color="#E1DFDD",
+        block_label_text_color="#252423",
+        block_title_text_color="#252423",
+        border_color_primary="#E1DFDD",
+        button_primary_background_fill="#F2C811",
+        button_primary_background_fill_hover="#e0b70f",
+        button_primary_background_fill_dark="#F2C811",
+        button_primary_background_fill_hover_dark="#e0b70f",
+        button_primary_text_color="#252423",
+        button_primary_text_color_dark="#252423",
         button_secondary_background_fill="#ffffff",
-        button_secondary_border_color=COLOR_AZUL_MARCA,
-        button_secondary_text_color=COLOR_AZUL_MARCA,
-        input_border_color=COLOR_BORDER,
+        button_secondary_border_color="#605E5C",
+        button_secondary_text_color="#252423",
+        input_border_color="#E1DFDD",
         input_background_fill="#ffffff",
-        checkbox_label_background_fill_selected=COLOR_AZUL,
-        checkbox_background_color_selected=COLOR_AZUL_MARCA,
-        slider_color=COLOR_VERDE,
+        checkbox_label_background_fill_selected="#F2C811",
+        checkbox_background_color_selected="#F2C811",
+        slider_color="#0078D4",
     )
+
+
+# ---------------------------------------------------------------------------
+# Override visual Power BI (aplicado por cima do CSS institucional legado)
+# ---------------------------------------------------------------------------
+_POWER_BI_CSS = r"""
+:root {
+  --pbi-yellow: #F2C811;
+  --pbi-dark: #252423;
+  --pbi-darker: #1B1A19;
+  --pbi-canvas: #F3F2F1;
+  --pbi-card: #FFFFFF;
+  --pbi-border: #E1DFDD;
+  --pbi-muted: #605E5C;
+  --pbi-blue: #0078D4;
+  --pbi-ok: #107C10;
+  --pbi-warn: #F7630C;
+  --pbi-bad: #D13438;
+}
+
+html, body, .gradio-container, .stApp, [class*="css"] {
+  font-family: "Segoe UI", "Segoe UI Web (West European)", system-ui, sans-serif !important;
+  color: var(--pbi-dark) !important;
+}
+
+.gradio-container,
+.gradio-container.svelte-1cdpdgc,
+body.gradio-page,
+.stApp {
+  background: var(--pbi-canvas) !important;
+}
+
+/* ---- Header Power BI ---- */
+.pbi-shell-header {
+  margin: 0 0 0.85rem 0;
+  border: 1px solid var(--pbi-border);
+  background: var(--pbi-card);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+.pbi-yellow-bar {
+  height: 4px;
+  background: var(--pbi-yellow);
+}
+
+.pbi-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+  background: var(--pbi-dark);
+  color: #fff;
+}
+
+.pbi-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.pbi-logo {
+  height: 42px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
+  background: #fff;
+  padding: 4px 8px;
+  border-radius: 2px;
+}
+
+.pbi-logo-text {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--pbi-yellow);
+}
+
+.pbi-kicker {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.72);
+  margin-bottom: 0.15rem;
+}
+
+.pbi-topbar-titles h1 {
+  margin: 0 !important;
+  font-size: 1.35rem !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  color: #fff !important;
+}
+
+.pbi-topbar-sub {
+  margin: 0.15rem 0 0 !important;
+  font-size: 0.82rem !important;
+  color: rgba(255,255,255,0.78) !important;
+}
+
+.pbi-topbar-meta {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.pbi-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.18);
+}
+
+.pbi-pill-live {
+  background: var(--pbi-yellow);
+  color: var(--pbi-dark);
+  border-color: var(--pbi-yellow);
+}
+
+.pbi-subtitle-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 1.1rem;
+  background: #fff;
+  border-top: 1px solid var(--pbi-border);
+  font-size: 0.86rem;
+  color: var(--pbi-muted);
+}
+
+.pbi-subtitle-alert {
+  color: var(--pbi-dark);
+  font-weight: 600;
+}
+
+/* ---- Workflow / filtros ---- */
+.pbi-workflow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem 0;
+  padding: 0.55rem 0.75rem;
+  background: #fff;
+  border: 1px solid var(--pbi-border);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.pbi-workflow-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--pbi-dark);
+  background: var(--pbi-canvas);
+  border: 1px solid var(--pbi-border);
+  border-radius: 2px;
+}
+
+.pbi-workflow-item span {
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  background: var(--pbi-yellow);
+  color: var(--pbi-dark);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.pbi-workflow-sep {
+  width: 1.1rem;
+  height: 1px;
+  background: var(--pbi-border);
+}
+
+/* Esconde header antigo se ainda existir */
+.cv-app-header, .cv-workflow, .cv-hero {
+  display: none !important;
+}
+
+/* ---- Canvas / painéis ---- */
+.cv-main {
+  max-width: 1180px !important;
+  margin: 0 auto !important;
+}
+
+.cv-painel-envio,
+.cv-painel-resultado,
+.cv-input-card {
+  background: #fff !important;
+  border: 1px solid var(--pbi-border) !important;
+  border-radius: 2px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+}
+
+.cv-btn-analisar button,
+button.cv-btn-analisar,
+.cv-main button.primary,
+.cv-main .primary {
+  background: var(--pbi-yellow) !important;
+  color: var(--pbi-dark) !important;
+  border: 1px solid #d4ae0c !important;
+  border-radius: 2px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+.cv-btn-analisar button:hover,
+button.cv-btn-analisar:hover {
+  background: #e0b70f !important;
+}
+
+/* ---- KPI tiles (Power BI) ---- */
+.pbi-kpi-board {
+  margin: 0 0 1rem 0;
+}
+
+.pbi-kpi-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.65rem;
+  padding: 0.15rem 0.1rem;
+}
+
+.pbi-kpi-head strong {
+  font-size: 0.95rem;
+  color: var(--pbi-dark);
+}
+
+.pbi-kpi-head span {
+  font-size: 0.82rem;
+  color: var(--pbi-muted);
+}
+
+.pbi-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.pbi-kpi {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--pbi-border);
+  border-radius: 2px;
+  padding: 0.85rem 0.9rem 0.75rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  overflow: hidden;
+  min-height: 6.2rem;
+}
+
+.pbi-kpi-accent {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+}
+
+.pbi-kpi-accent.total { background: var(--pbi-blue); }
+.pbi-kpi-accent.ok { background: var(--pbi-ok); }
+.pbi-kpi-accent.parcial { background: var(--pbi-warn); }
+.pbi-kpi-accent.nao { background: var(--pbi-bad); }
+
+.pbi-kpi-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--pbi-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-left: 0.35rem;
+}
+
+.pbi-kpi-value {
+  display: block;
+  margin: 0.35rem 0 0.1rem 0.35rem;
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--pbi-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.pbi-kpi-sub {
+  margin-left: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--pbi-muted);
+}
+
+/* ---- Resultado / badges ---- */
+.cv-resultado {
+  background: #fff !important;
+  border: 1px solid var(--pbi-border) !important;
+  border-radius: 2px !important;
+  padding: 1rem 1.1rem !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+
+.cv-badge-ok { background: #dff6dd !important; color: var(--pbi-ok) !important; border-radius: 2px !important; }
+.cv-badge-parcial { background: #fff4ce !important; color: #8a4700 !important; border-radius: 2px !important; }
+.cv-badge-nao { background: #fde7e9 !important; color: var(--pbi-bad) !important; border-radius: 2px !important; }
+
+.cv-progress {
+  background: #fff !important;
+  border: 1px solid var(--pbi-border) !important;
+  border-radius: 2px !important;
+  padding: 0.55rem 0.75rem !important;
+}
+
+.cv-progress-step.active .cv-progress-num,
+.cv-progress-step.done .cv-progress-num {
+  background: var(--pbi-yellow) !important;
+  color: var(--pbi-dark) !important;
+}
+
+.cv-audit-accordion,
+.cv-inventory-accordion,
+.cv-review-accordion,
+.cv-help-accordion,
+.cv-system-accordion {
+  border-radius: 2px !important;
+}
+
+.cv-footer-note {
+  color: var(--pbi-muted) !important;
+  border-top: 1px solid var(--pbi-border) !important;
+}
+
+.cv-card {
+  border-radius: 2px !important;
+  border-color: var(--pbi-border) !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+
+@media (max-width: 900px) {
+  .pbi-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pbi-topbar { flex-direction: column; align-items: flex-start; }
+  .pbi-logo { height: 36px; }
+}
+@media (max-width: 560px) {
+  .pbi-kpi-row { grid-template-columns: 1fr; }
+}
+"""
+
+GRADIO_CSS = GRADIO_CSS + "\n" + _POWER_BI_CSS
+
+if "</style>" in APP_CSS:
+    APP_CSS = APP_CSS.replace("</style>", _POWER_BI_CSS + "\n</style>", 1)
+else:
+    APP_CSS = APP_CSS + f"<style>{_POWER_BI_CSS}</style>"
+
