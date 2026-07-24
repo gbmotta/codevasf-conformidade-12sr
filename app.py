@@ -572,15 +572,15 @@ def _gradio_major() -> int:
 
 
 def build_ui() -> gr.Blocks:
-    """Monta a interface estilo dashboard Power BI."""
+    """Monta a interface institucional Codevasf (layout dashboard)."""
 
     hero_html = render_hero(
-        "Painel de verificação assistida dos documentos exigidos para doação "
+        "Verificação assistida dos documentos exigidos para doação "
         "e concessão de bens móveis."
     )
 
     blocks_kwargs: dict = {
-        "title": "Codevasf 12ª SR — Conformidade (Dashboard)"
+        "title": "Codevasf 12ª SR — Conformidade Documental"
     }
 
     if _gradio_major() < 6:
