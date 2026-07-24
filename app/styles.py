@@ -2161,7 +2161,12 @@ def gradio_theme():
         primary_hue="yellow",
         secondary_hue="slate",
         neutral_hue="slate",
-        font=["Segoe UI", "Segoe UI Web (West European)", "system-ui", "sans-serif"],
+        font=[
+            gr.themes.GoogleFont("Source Sans 3"),
+            "Segoe UI",
+            "system-ui",
+            "sans-serif",
+        ],
     ).set(
         body_background_fill="#F3F2F1",
         body_background_fill_dark="#F3F2F1",
